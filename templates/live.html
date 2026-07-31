@@ -185,7 +185,7 @@
         const res = await fetch(`https://api.openf1.org/v1/sessions?year=${currentYear}`);
         const sessions = await res.json();
         
-        if (!sessions.length) {
+        if (!sessions || !sessions.length) {
           const fallbackRes = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
           const fallbackSessions = await fallbackRes.json();
           showCountdown(fallbackSessions[0] || null);
@@ -281,27 +281,36 @@
     }
 
     async function loadLiveData() {
-      const [dRes, lRes, iRes, rRes, sRes, pRes, oRes] = await Promise.all([
-        fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`),
-        fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`),
-        fetch(`https://api.openf1.org/v1/intervals?session_key=${sessionKey}`),
-        fetch(`https://api.openf1.org/v1/race_control?session_key=${sessionKey}`),
-        fetch(`https://api.openf1.org/v1/stints?session_key=${sessionKey}`),
-        fetch(`https://api.openf1.org/v1/pit?session_key=${sessionKey}`),
-        fetch(`https://api.openf1.org/v1/overtakes?session_key=${sessionKey}`)
-      ]);
+      try {
+        const [dRes, lRes, iRes, rRes, sRes, pRes, oRes] = await Promise.all([
+          fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/intervals?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/race_control?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/stints?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/pit?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/overtakes?session_key=${sessionKey}`)
+        ]);
 
-      (await dRes.json()).forEach(d => driversMap[d.driver_number] = d);
-      lapsData = await lRes.json();
-      intervalsData = await iRes.json();
-      raceControlData = await rRes.json();
-      stintsData = await sRes.json();
-      pitData = await pRes.json();
-      overtakesData = await oRes.json();
+        driversMap = {};
+        const dData = await dRes.json();
+        if (Array.isArray(dData)) {
+          dData.forEach(d => driversMap[d.driver_number] = d);
+        }
 
-      renderKPIs();
-      renderLiveDashboard();
-      renderPenalties();
+        lapsData = (await lRes.json()) || [];
+        intervalsData = (await iRes.json()) || [];
+        raceControlData = (await rRes.json()) || [];
+        stintsData = (await sRes.json()) || [];
+        pitData = (await pRes.json()) || [];
+        overtakesData = (await oRes.json()) || [];
+
+        renderKPIs();
+        renderLiveDashboard();
+        renderPenalties();
+      } catch (err) {
+        console.error("Error loading live data:", err);
+      }
     }
 
     function populateDriverSelect() {
@@ -311,7 +320,7 @@
         const opt = document.createElement('option');
         opt.value = String(d.driver_number);
         opt.selected = true;
-        opt.innerText = `#${d.driver_number} - ${d.broadcast_name}`;
+        opt.innerText = `#${d.driver_number} - ${d.broadcast_name || d.full_name || d.driver_number}`;
         select.appendChild(opt);
       });
     }
@@ -337,7 +346,7 @@
       const validLaps = lapsData.filter(l => l.lap_duration && l.lap_duration > 50 && l.lap_duration < MAX_CLEAN_LAP_TIME);
       if (validLaps.length) {
         const bestLap = validLaps.reduce((p, c) => p.lap_duration < c.lap_duration ? p : c);
-        const leaderName = driversMap[bestLap.driver_number] ? driversMap[bestLap.driver_number].broadcast_name : `#${bestLap.driver_number}`;
+        const leaderName = driversMap[bestLap.driver_number] ? (driversMap[bestLap.driver_number].broadcast_name || driversMap[bestLap.driver_number].full_name) : `#${bestLap.driver_number}`;
         
         document.getElementById('kpi-title-1').innerText = currentSessionType.includes('Qualifying') ? 'Pole Position Holder' : 'P1 Pace Leader';
         document.getElementById('kpi-val-1').innerText = leaderName;
@@ -352,7 +361,7 @@
           const currTime = curr.stop_duration || curr.pit_duration || 999;
           return currTime < prevTime ? curr : prev;
         });
-        const pitDriver = driversMap[bestPit.driver_number] ? driversMap[bestPit.driver_number].broadcast_name : `#${bestPit.driver_number}`;
+        const pitDriver = driversMap[bestPit.driver_number] ? (driversMap[bestPit.driver_number].broadcast_name || driversMap[bestPit.driver_number].full_name) : `#${bestPit.driver_number}`;
         const duration = bestPit.stop_duration ? `${bestPit.stop_duration.toFixed(2)}s` : `${bestPit.pit_duration.toFixed(1)}s (Lane)`;
         document.getElementById('kpi-val-3').innerText = `${pitDriver} (${duration})`;
       } else {
@@ -363,7 +372,7 @@
       lapsData.forEach(l => {
         if (l.st_speed && l.st_speed > topSpeed) {
           topSpeed = l.st_speed;
-          topSpeedDriver = driversMap[l.driver_number] ? driversMap[l.driver_number].broadcast_name : `#${l.driver_number}`;
+          topSpeedDriver = driversMap[l.driver_number] ? (driversMap[l.driver_number].broadcast_name || driversMap[l.driver_number].full_name) : `#${l.driver_number}`;
         }
       });
       document.getElementById('kpi-val-4').innerText = `${topSpeedDriver} (${topSpeed} km/h)`;
@@ -421,12 +430,14 @@
     }
 
     function renderLiveChart(selectedNums) {
-      const datasets = selectedNums.map(numStr => {
+      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
+      
+      const datasets = targets.map(numStr => {
         const num = Number(numStr);
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
-        const driver = driversMap[num] || { broadcast_name: numStr, team_colour: 'FFFFFF' };
+        const driver = driversMap[num] || driversMap[numStr] || { broadcast_name: `#${numStr}` };
         return {
-          label: driver.broadcast_name,
+          label: driver.broadcast_name || driver.full_name || `#${numStr}`,
           data: dLaps.map(l => ({ x: l.lap_number, y: l.lap_duration })),
           borderColor: `#${driver.team_colour || 'ffffff'}`,
           backgroundColor: `#${driver.team_colour || 'ffffff'}`,
@@ -456,11 +467,13 @@
       const tbody = document.getElementById('strategy-table');
       tbody.innerHTML = '';
 
-      selectedNums.forEach(numStr => {
+      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
+
+      targets.forEach(numStr => {
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr);
         if (!dLaps.length) return;
 
-        const driver = driversMap[Number(numStr)];
+        const driver = driversMap[Number(numStr)] || driversMap[numStr];
         const validLaps = dLaps.filter(l => l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
         const avgLap = validLaps.length ? (validLaps.reduce((acc, l) => acc + l.lap_duration, 0) / validLaps.length).toFixed(2) : 'N/A';
         const latestLap = dLaps[dLaps.length - 1];
@@ -475,7 +488,7 @@
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><strong>${driver ? driver.broadcast_name : numStr}</strong></td>
+          <td><strong>${driver ? (driver.broadcast_name || driver.full_name) : `#${numStr}`}</strong></td>
           <td>${avgLap !== 'N/A' ? avgLap + 's' : 'N/A'}</td>
           <td>${latestLap?.compound || 'Unk'} (${latestLap?.tyre_age_at_start || 0} L)</td>
           <td>${gapToLeader}</td>
@@ -496,16 +509,23 @@
         return;
       }
 
-      const filteredPits = pitData.filter(p => selectedNums.includes(String(p.driver_number)));
+      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
+      const filteredPits = pitData.filter(p => targets.includes(String(p.driver_number)));
+
+      if (!filteredPits.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color: #888;">No pit stops recorded for target drivers.</td></tr>';
+        return;
+      }
+
       let stopCounts = {};
       filteredPits.forEach(p => {
         const numStr = String(p.driver_number);
         stopCounts[numStr] = (stopCounts[numStr] || 0) + 1;
-        const driver = driversMap[p.driver_number];
+        const driver = driversMap[p.driver_number] || driversMap[numStr];
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><strong>${driver ? driver.broadcast_name : numStr}</strong></td>
+          <td><strong>${driver ? (driver.broadcast_name || driver.full_name) : `#${numStr}`}</strong></td>
           <td>Stop ${stopCounts[numStr]}</td>
           <td>Lap ${p.lap_number || 'N/A'}</td>
           <td>${p.pit_duration ? p.pit_duration.toFixed(2) + 's' : 'N/A'}</td>
@@ -519,16 +539,18 @@
       const tbody = document.getElementById('sector-table');
       tbody.innerHTML = '';
 
+      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
+
       const allValidLaps = lapsData.filter(l => l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
       const poleS1 = allValidLaps.length ? Math.min(...allValidLaps.map(l => l.duration_sector_1).filter(s => s > 0)) : 0;
       const poleS2 = allValidLaps.length ? Math.min(...allValidLaps.map(l => l.duration_sector_2).filter(s => s > 0)) : 0;
       const poleS3 = allValidLaps.length ? Math.min(...allValidLaps.map(l => l.duration_sector_3).filter(s => s > 0)) : 0;
 
-      selectedNums.forEach(numStr => {
+      targets.forEach(numStr => {
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_duration);
         if (!dLaps.length) return;
 
-        const driver = driversMap[Number(numStr)];
+        const driver = driversMap[Number(numStr)] || driversMap[numStr];
         const s1s = dLaps.map(l => l.duration_sector_1).filter(s => s > 0);
         const s2s = dLaps.map(l => l.duration_sector_2).filter(s => s > 0);
         const s3s = dLaps.map(l => l.duration_sector_3).filter(s => s > 0);
@@ -549,7 +571,7 @@
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><strong>${driver ? driver.broadcast_name : numStr}</strong></td>
+          <td><strong>${driver ? (driver.broadcast_name || driver.full_name) : `#${numStr}`}</strong></td>
           <td>${bestS1.toFixed(3)}s <span style="font-size:0.8rem; color:#888;">(${dS1})</span></td>
           <td>${bestS2.toFixed(3)}s <span style="font-size:0.8rem; color:#888;">(${dS2})</span></td>
           <td>${bestS3.toFixed(3)}s <span style="font-size:0.8rem; color:#888;">(${dS3})</span></td>
@@ -565,8 +587,10 @@
       const tbody = document.getElementById('practice-table');
       tbody.innerHTML = '';
 
-      selectedNums.forEach(numStr => {
-        const driver = driversMap[Number(numStr)];
+      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
+
+      targets.forEach(numStr => {
+        const driver = driversMap[Number(numStr)] || driversMap[numStr];
         const dStints = stintsData.filter(s => String(s.driver_number) === numStr);
 
         dStints.forEach(s => {
@@ -579,7 +603,7 @@
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-              <td><strong>${driver ? driver.broadcast_name : numStr}</strong></td>
+              <td><strong>${driver ? (driver.broadcast_name || driver.full_name) : `#${numStr}`}</strong></td>
               <td>${s.compound || 'UNK'}</td>
               <td>${stintLaps.length} Laps (L${s.lap_start}-L${s.lap_end})</td>
               <td>${avgPace}s</td>
@@ -605,7 +629,7 @@
       }
 
       penalties.forEach(p => {
-        const driverName = p.driver_number && driversMap[p.driver_number] ? driversMap[p.driver_number].broadcast_name : (p.driver_number ? `#${p.driver_number}` : 'ALL');
+        const driverName = p.driver_number && driversMap[p.driver_number] ? (driversMap[p.driver_number].broadcast_name || driversMap[p.driver_number].full_name) : (p.driver_number ? `#${p.driver_number}` : 'ALL');
         const box = document.createElement('div');
         box.className = 'penalty-box';
         box.innerHTML = `<strong>${driverName}</strong> (Lap ${p.lap_number || 'N/A'}): ${p.message}`;
