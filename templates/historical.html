@@ -416,7 +416,6 @@
       const sType = document.getElementById('type-select').value;
 
       if (sType === 'Race') {
-        // 1. Determine Race Winner using position 1 log or top driver from classification logic
         const p1Positions = positionData.filter(p => p.position === 1);
         let winnerName = 'N/A';
         
@@ -424,8 +423,6 @@
           const winnerNum = p1Positions[p1Positions.length - 1].driver_number;
           winnerName = driversMap[winnerNum] ? (driversMap[winnerNum].broadcast_name || driversMap[winnerNum].full_name) : `#${winnerNum}`;
         } else {
-          // Fallback if position endpoint log is missing
-          const maxLaps = Math.max(...lapsData.map(l => l.lap_number || 0), 1);
           const activeNums = Object.keys(driversMap).map(String);
           const driverSummary = activeNums.map(numStr => {
             const dLaps = lapsData.filter(l => String(l.driver_number) === numStr);
@@ -446,7 +443,6 @@
         document.getElementById('kpi-title-1').innerText = 'Race Winner';
         document.getElementById('kpi-val-1').innerText = winnerName;
 
-        // 2. Determine Fastest Lap Award separately
         const validLaps = lapsData.filter(l => l.lap_duration && l.lap_duration > 50 && l.lap_duration < MAX_CLEAN_LAP_TIME);
         if (validLaps.length) {
           const bestLap = validLaps.reduce((p, c) => p.lap_duration < c.lap_duration ? p : c);
@@ -455,7 +451,6 @@
           document.getElementById('kpi-val-2').innerText = `${flDriver} (${bestLap.lap_duration.toFixed(3)}s)`;
         }
       } else {
-        // Session Leader by Single Lap Pace (Qualifying & Practice)
         const validLaps = lapsData.filter(l => l.lap_duration && l.lap_duration > 50 && l.lap_duration < MAX_CLEAN_LAP_TIME);
         if (validLaps.length) {
           const bestLap = validLaps.reduce((p, c) => p.lap_duration < c.lap_duration ? p : c);
@@ -469,7 +464,6 @@
         }
       }
 
-      // 3. Top Speed Trap
       let topSpeed = 0, topSpeedDriver = 'N/A';
       lapsData.forEach(l => {
         if (l.st_speed && l.st_speed > topSpeed) {
@@ -684,7 +678,13 @@
       container.innerHTML = '';
 
       const penalties = raceControlData.filter(rc => 
-        rc.category === 'Penalty' || rc.message?.includes('PENALTY') || rc.message?.includes('INVESTIGATION') || rc.flag === 'BLACK AND WHITE'
+        rc.category === 'Penalty' || 
+        rc.message?.includes('PENALTY') || 
+        rc.message?.includes('INVESTIGATION') || 
+        rc.message?.includes('CAR') ||
+        rc.flag === 'BLACK AND WHITE' ||
+        rc.flag === 'YELLOW' ||
+        rc.flag === 'RED'
       );
 
       if (!penalties.length) {
@@ -693,10 +693,40 @@
       }
 
       penalties.forEach(p => {
-        const driverName = p.driver_number && driversMap[p.driver_number] ? (driversMap[p.driver_number].broadcast_name || driversMap[p.driver_number].full_name) : (p.driver_number ? `#${p.driver_number}` : 'ALL');
+        let resolvedDriver = null;
+
+        // 1. Direct driver_number check
+        if (p.driver_number && driversMap[p.driver_number]) {
+          resolvedDriver = driversMap[p.driver_number].broadcast_name || driversMap[p.driver_number].full_name;
+        }
+
+        // 2. Parse text message for car numbers / driver codes
+        if (!resolvedDriver && p.message) {
+          const carMatch = p.message.match(/CAR\s+(\d+)/i);
+          if (carMatch) {
+            const carNum = Number(carMatch[1]);
+            if (driversMap[carNum]) {
+              resolvedDriver = driversMap[carNum].broadcast_name || driversMap[carNum].full_name;
+            } else {
+              resolvedDriver = `CAR #${carNum}`;
+            }
+          } else {
+            const codeMatch = p.message.match(/\(([A-Z]{3})\)/);
+            if (codeMatch) {
+              const code = codeMatch[1];
+              const found = Object.values(driversMap).find(d => d.name_acronym === code || d.broadcast_name?.includes(code));
+              if (found) resolvedDriver = found.broadcast_name || found.full_name;
+            }
+          }
+        }
+
+        // 3. Fallback for track-wide flag events
+        const isTrackWideFlag = p.flag === 'YELLOW' || p.flag === 'RED' || p.flag === 'SAFETY CAR' || p.message?.includes('SAFETY CAR') || p.message?.includes('VSC');
+        const labelName = resolvedDriver ? resolvedDriver : (isTrackWideFlag ? 'ALL' : 'ALL DRIVERS');
+
         const box = document.createElement('div');
         box.className = 'penalty-box';
-        box.innerHTML = `<strong>${driverName}</strong> (Lap ${p.lap_number || 'N/A'}): ${p.message}`;
+        box.innerHTML = `<strong>${labelName}</strong> (Lap ${p.lap_number || 'N/A'}): ${p.message}`;
         container.appendChild(box);
       });
     }
