@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>F1 Historical Vault — Scuderia Sanfelice</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background: #121212; color: #fff; }
     nav { display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
@@ -586,35 +589,152 @@
       document.getElementById('kpi-val-4').innerText = lapsData.length;
     }
 
-    function renderChart(activeNums) {
-      const datasets = activeNums.map(numStr => {
+function renderChart(activeNums) {
+
+    const datasets = activeNums.map(numStr => {
+
         const num = Number(numStr);
-        const dLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
-        const driver = driversMap[num] || driversMap[numStr] || { broadcast_name: numStr };
+
+        const dLaps = lapsData.filter(l =>
+            String(l.driver_number) === numStr &&
+            l.lap_duration &&
+            l.lap_duration < MAX_CLEAN_LAP_TIME
+        );
+
+        const driver =
+            driversMap[num] ||
+            driversMap[numStr] ||
+            { broadcast_name: numStr };
+
         return {
-          label: driver.broadcast_name || driver.full_name || numStr,
-          data: dLaps.map(l => ({ x: l.lap_number, y: l.lap_duration })),
-          borderColor: `#${driver.team_colour || 'ffffff'}`,
-          backgroundColor: `#${driver.team_colour || 'ffffff'}`,
-          tension: 0.1,
-          pointRadius: dLaps.map(l => l.is_pit_out_lap ? 7 : 2),
-          pointStyle: dLaps.map(l => l.is_pit_out_lap ? 'rectRot' : 'circle')
+
+            label: driver.broadcast_name || driver.full_name || numStr,
+
+            data: dLaps.map(l => ({
+                x: l.lap_number,
+                y: l.lap_duration
+            })),
+
+            borderColor: `#${driver.team_colour || "ffffff"}`,
+            backgroundColor: `#${driver.team_colour || "ffffff"}`,
+
+            tension: 0.1,
+
+            pointRadius: dLaps.map(l =>
+                l.is_pit_out_lap ? 7 : 2
+            ),
+
+            pointStyle: dLaps.map(l =>
+                l.is_pit_out_lap ? "rectRot" : "circle"
+            )
+
         };
-      });
-      if (chartInstance) chartInstance.destroy();
-      chartInstance = new Chart(document.getElementById('lapChart').getContext('2d'), {
-        type: 'line',
-        data: { datasets },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: { type: 'linear', title: { display: true, text: 'Lap Number', color: '#888' } },
-            y: { title: { display: true, text: 'Lap Time (Seconds)', color: '#888' }, suggestedMax: 140 }
-          }
+
+    });
+
+    if (chartInstance)
+        chartInstance.destroy();
+
+    chartInstance = new Chart(
+        document.getElementById("lapChart").getContext("2d"),
+        {
+
+            type: "line",
+
+            data: {
+                datasets
+            },
+
+            options: {
+
+                responsive: true,
+
+                maintainAspectRatio: false,
+
+                interaction: {
+                    mode: "nearest",
+                    intersect: false
+                },
+
+                scales: {
+
+                    x: {
+                        type: "linear",
+                        title: {
+                            display: true,
+                            text: "Lap Number",
+                            color: "#888"
+                        }
+                    },
+
+                    y: {
+
+                        title: {
+                            display: true,
+                            text: "Lap Time (Seconds)",
+                            color: "#888"
+                        },
+
+                        suggestedMax: 140
+
+                    }
+
+                },
+
+                plugins: {
+
+                    legend: {
+                        position: "top"
+                    },
+
+                    zoom: {
+
+                        pan: {
+
+                            enabled: true,
+
+                            mode: "y"
+
+                        },
+
+                        zoom: {
+
+                            wheel: {
+
+                                enabled: true
+
+                            },
+
+                            drag: {
+
+                                enabled: true
+
+                            },
+
+                            pinch: {
+
+                                enabled: true
+
+                            },
+
+                            mode: "y"
+
+                        }
+
+                    }
+
+                }
+
+            }
+
         }
-      });
-    }
+    );
+
+    document
+        .getElementById("lapChart")
+        .ondblclick = () => chartInstance.resetZoom();
+
+}
 
     function renderClassificationTable(activeNums) {
       const tbody = document.getElementById('classification-table');
