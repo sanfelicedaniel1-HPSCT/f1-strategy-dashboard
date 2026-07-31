@@ -33,7 +33,10 @@
     
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { text-align: left; padding: 10px; border-bottom: 1px solid #333; font-size: 0.95rem; }
-    th { color: #888; background: #181818; }
+    th { color: #888; background: #181818; cursor: pointer; user-select: none; transition: color 0.2s, background 0.2s; }
+    th:hover { color: #e10600; background: #222; }
+    th.sort-asc::after { content: " ▲"; color: #e10600; font-size: 0.8rem; }
+    th.sort-desc::after { content: " ▼"; color: #e10600; font-size: 0.8rem; }
 
     .pos-gained { color: #00e676; font-weight: bold; }
     .pos-lost { color: #ff5252; font-weight: bold; }
@@ -124,16 +127,16 @@
   <!-- RACE SPECIFIC CARD: CLASSIFICATION -->
   <div id="section-race-classification" class="card">
     <h2>Official Race Classification & Strategy</h2>
-    <table>
+    <table id="tbl-classification">
       <thead>
         <tr>
-          <th>Fin Pos</th>
-          <th>Driver</th>
-          <th>Grid ➔ Finish (Δ)</th>
-          <th>Tire Strategy (Stints)</th>
-          <th>Avg Pace</th>
-          <th>Top Speed</th>
-          <th>Status</th>
+          <th onclick="sortTable('tbl-classification', 0)">Fin Pos</th>
+          <th onclick="sortTable('tbl-classification', 1)">Driver</th>
+          <th onclick="sortTable('tbl-classification', 2)">Grid ➔ Finish (Δ)</th>
+          <th onclick="sortTable('tbl-classification', 3)">Tire Strategy (Stints)</th>
+          <th onclick="sortTable('tbl-classification', 4)">Avg Pace</th>
+          <th onclick="sortTable('tbl-classification', 5)">Top Speed</th>
+          <th onclick="sortTable('tbl-classification', 6)">Status</th>
         </tr>
       </thead>
       <tbody id="classification-table"></tbody>
@@ -143,14 +146,14 @@
   <!-- RACE SPECIFIC CARD: PIT STOPS -->
   <div id="section-race-pits" class="card">
     <h2>🔧 Pit Stop Durations & Lane Time Analysis</h2>
-    <table>
+    <table id="tbl-pits">
       <thead>
         <tr>
-          <th>Driver</th>
-          <th>Stop #</th>
-          <th>Lap #</th>
-          <th>Pit Lane Duration</th>
-          <th>Stationary Stop Time</th>
+          <th onclick="sortTable('tbl-pits', 0)">Driver</th>
+          <th onclick="sortTable('tbl-pits', 1)">Stop #</th>
+          <th onclick="sortTable('tbl-pits', 2)">Lap #</th>
+          <th onclick="sortTable('tbl-pits', 3)">Pit Lane Duration</th>
+          <th onclick="sortTable('tbl-pits', 4)">Stationary Stop Time</th>
         </tr>
       </thead>
       <tbody id="pit-table"></tbody>
@@ -160,16 +163,16 @@
   <!-- QUALIFYING & PRACTICE CARD: SECTORS -->
   <div id="section-sectors" class="card">
     <h2>⏱️ Sector Analysis & Theoretical Ideal Laps</h2>
-    <table>
+    <table id="tbl-sectors">
       <thead>
         <tr>
-          <th>Driver</th>
-          <th>Best Sector 1</th>
-          <th>Best Sector 2</th>
-          <th>Best Sector 3</th>
-          <th>Theoretical Ideal Lap</th>
-          <th>Actual Best Lap</th>
-          <th>Delta to Ideal</th>
+          <th onclick="sortTable('tbl-sectors', 0)">Driver</th>
+          <th onclick="sortTable('tbl-sectors', 1)">Best Sector 1</th>
+          <th onclick="sortTable('tbl-sectors', 2)">Best Sector 2</th>
+          <th onclick="sortTable('tbl-sectors', 3)">Best Sector 3</th>
+          <th onclick="sortTable('tbl-sectors', 4)">Theoretical Ideal Lap</th>
+          <th onclick="sortTable('tbl-sectors', 5)">Actual Best Lap</th>
+          <th onclick="sortTable('tbl-sectors', 6)">Delta to Ideal</th>
         </tr>
       </thead>
       <tbody id="sector-table"></tbody>
@@ -179,14 +182,14 @@
   <!-- PRACTICE SPECIFIC CARD: LONG RUNS -->
   <div id="section-practice-runs" class="card hidden">
     <h2>🧪 Long Run Stint Simulations (5+ Consecutive Laps)</h2>
-    <table>
+    <table id="tbl-practice">
       <thead>
         <tr>
-          <th>Driver</th>
-          <th>Compound</th>
-          <th>Stint Duration</th>
-          <th>Avg Long Run Pace</th>
-          <th>Pace Degradation Slope (Δt / Lap)</th>
+          <th onclick="sortTable('tbl-practice', 0)">Driver</th>
+          <th onclick="sortTable('tbl-practice', 1)">Compound</th>
+          <th onclick="sortTable('tbl-practice', 2)">Stint Duration</th>
+          <th onclick="sortTable('tbl-practice', 3)">Avg Long Run Pace</th>
+          <th onclick="sortTable('tbl-practice', 4)">Pace Degradation Slope (Δt / Lap)</th>
         </tr>
       </thead>
       <tbody id="practice-table"></tbody>
@@ -695,12 +698,10 @@
       penalties.forEach(p => {
         let resolvedDriver = null;
 
-        // 1. Direct driver_number check
         if (p.driver_number && driversMap[p.driver_number]) {
           resolvedDriver = driversMap[p.driver_number].broadcast_name || driversMap[p.driver_number].full_name;
         }
 
-        // 2. Parse text message for car numbers / driver codes
         if (!resolvedDriver && p.message) {
           const carMatch = p.message.match(/CAR\s+(\d+)/i);
           if (carMatch) {
@@ -720,7 +721,6 @@
           }
         }
 
-        // 3. Fallback for track-wide flag events
         const isTrackWideFlag = p.flag === 'YELLOW' || p.flag === 'RED' || p.flag === 'SAFETY CAR' || p.message?.includes('SAFETY CAR') || p.message?.includes('VSC');
         const labelName = resolvedDriver ? resolvedDriver : (isTrackWideFlag ? 'ALL' : 'ALL DRIVERS');
 
@@ -729,6 +729,72 @@
         box.innerHTML = `<strong>${labelName}</strong> (Lap ${p.lap_number || 'N/A'}): ${p.message}`;
         container.appendChild(box);
       });
+    }
+
+    // GENERAL TABLE SORTING ENGINE
+    const tableSortStates = {};
+
+    function sortTable(tableId, colIndex) {
+      const table = document.getElementById(tableId);
+      const tbody = table.querySelector('tbody');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      
+      if (!rows.length || rows[0].cells.length <= colIndex) return;
+
+      if (!tableSortStates[tableId]) {
+        tableSortStates[tableId] = { col: null, asc: true };
+      }
+
+      const state = tableSortStates[tableId];
+      if (state.col === colIndex) {
+        state.asc = !state.asc;
+      } else {
+        state.col = colIndex;
+        state.asc = true;
+      }
+
+      // Update UI indicators
+      const headers = table.querySelectorAll('th');
+      headers.forEach((th, idx) => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (idx === colIndex) {
+          th.classList.add(state.asc ? 'sort-asc' : 'sort-desc');
+        }
+      });
+
+      rows.sort((a, b) => {
+        let cellA = a.cells[colIndex] ? a.cells[colIndex].innerText.trim() : '';
+        let cellB = b.cells[colIndex] ? b.cells[colIndex].innerText.trim() : '';
+
+        // Extract raw numeric values (e.g. "82.000s" -> 82.000, "346 km/h" -> 346, "Stop 2" -> 2, "P1" -> 1)
+        const valA = parseSortValue(cellA);
+        const valB = parseSortValue(cellB);
+
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          return state.asc ? valA - valB : valB - valA;
+        } else {
+          return state.asc ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+        }
+      });
+
+      rows.forEach(row => tbody.appendChild(row));
+    }
+
+    function parseSortValue(text) {
+      if (!text) return '';
+      
+      // Handle position notation like "P1", "P12"
+      const pMatch = text.match(/^P(\d+)/i);
+      if (pMatch) return Number(pMatch[1]);
+
+      // Strip time units, speeds, stop labels, and plus/minus symbols
+      const numMatch = text.match(/^([+-]?\d+\.?\d*)/);
+      if (numMatch) {
+        const num = parseFloat(numMatch[1]);
+        if (!isNaN(num)) return num;
+      }
+
+      return text.toLowerCase();
     }
 
     autoLoadLatestLandingEvent();
