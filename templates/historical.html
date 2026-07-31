@@ -230,7 +230,7 @@
           yearSelect.value = latest.year || currentYear;
           document.getElementById('type-select').value = latest.session_type || 'Race';
           
-          await loadSessions(true, latest.session_key);
+          await loadSessions(true, String(latest.session_key));
         } else {
           await loadSessions(true);
         }
@@ -257,15 +257,20 @@
           return;
         }
 
+        let foundMatch = false;
         sessions.forEach(s => {
           const opt = document.createElement('option');
-          opt.value = s.session_key;
+          opt.value = String(s.session_key);
           opt.innerText = `${s.circuit_short_name || s.location} GP — ${s.session_name}`;
           select.appendChild(opt);
+
+          if (targetSessionKey && String(s.session_key) === String(targetSessionKey)) {
+            foundMatch = true;
+          }
         });
 
-        if (targetSessionKey) {
-          select.value = targetSessionKey;
+        if (targetSessionKey && foundMatch) {
+          select.value = String(targetSessionKey);
         } else if (sessions.length > 0) {
           select.selectedIndex = sessions.length - 1;
         }
@@ -753,7 +758,6 @@
         state.asc = true;
       }
 
-      // Update UI indicators
       const headers = table.querySelectorAll('th');
       headers.forEach((th, idx) => {
         th.classList.remove('sort-asc', 'sort-desc');
@@ -766,7 +770,6 @@
         let cellA = a.cells[colIndex] ? a.cells[colIndex].innerText.trim() : '';
         let cellB = b.cells[colIndex] ? b.cells[colIndex].innerText.trim() : '';
 
-        // Extract raw numeric values (e.g. "82.000s" -> 82.000, "346 km/h" -> 346, "Stop 2" -> 2, "P1" -> 1)
         const valA = parseSortValue(cellA);
         const valB = parseSortValue(cellB);
 
@@ -783,11 +786,9 @@
     function parseSortValue(text) {
       if (!text) return '';
       
-      // Handle position notation like "P1", "P12"
       const pMatch = text.match(/^P(\d+)/i);
       if (pMatch) return Number(pMatch[1]);
 
-      // Strip time units, speeds, stop labels, and plus/minus symbols
       const numMatch = text.match(/^([+-]?\d+\.?\d*)/);
       if (numMatch) {
         const num = parseFloat(numMatch[1]);
