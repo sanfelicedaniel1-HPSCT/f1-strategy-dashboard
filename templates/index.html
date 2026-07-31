@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Scuderia San Felice — F1 Strategy Dashboard</title>
+  <title>Sanfelice — F1 Strategy Dashboard</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -19,7 +19,7 @@
     header {
       background: #1a1a1a;
       border-bottom: 3px solid #e10600;
-      padding: 20px;
+      padding: 25px 20px;
       text-align: center;
     }
 
@@ -39,17 +39,59 @@
     main {
       flex: 1;
       display: flex;
-      justify-content: center;
+      flex-direction: column;
       align-items: center;
       padding: 40px 20px;
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+      box-sizing: border-box;
     }
 
+    /* GRAPHIC BANNER */
+    .graphic-container {
+      width: 100%;
+      background: linear-gradient(135deg, #1e1e1e 0%, #151515 100%);
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 25px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      gap: 30px;
+      margin-bottom: 35px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .graphic-svg {
+      flex: 0 0 220px;
+      height: 140px;
+    }
+
+    .graphic-text {
+      flex: 1;
+    }
+
+    .graphic-text h2 {
+      margin: 0 0 8px 0;
+      color: #e10600;
+      font-size: 1.4rem;
+    }
+
+    .graphic-text p {
+      margin: 0;
+      color: #ccc;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    /* CARD GRID */
     .card-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 30px;
-      max-width: 900px;
+      gap: 25px;
       width: 100%;
+      margin-bottom: 35px;
     }
 
     .hub-card {
@@ -97,6 +139,34 @@
       letter-spacing: 0.5px;
     }
 
+    /* SYSTEM FEATURES BREAKDOWN */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 15px;
+      width: 100%;
+    }
+
+    .feature-item {
+      background: #181818;
+      border-left: 3px solid #e10600;
+      padding: 15px;
+      border-radius: 6px;
+    }
+
+    .feature-item h3 {
+      margin: 0 0 5px 0;
+      font-size: 1rem;
+      color: #fff;
+    }
+
+    .feature-item p {
+      margin: 0;
+      color: #888;
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+
     footer {
       text-align: center;
       padding: 20px;
@@ -104,41 +174,97 @@
       font-size: 0.85rem;
       border-top: 1px solid #222;
     }
+
+    @media (max-width: 650px) {
+      .graphic-container {
+        flex-direction: column;
+        text-align: center;
+      }
+      .graphic-svg {
+        flex: 0 0 auto;
+        width: 100%;
+      }
+    }
   </style>
 </head>
 <body>
 
   <header>
-    <h1>🏎️ Scuderia San Felice</h1>
+    <h1>🏎️ Sanfelice</h1>
     <p>Real-Time F1 Telemetry & Historical Race Analytics Hub</p>
   </header>
 
   <main>
+
+    <!-- CIRCUIT GRAPHIC & OVERVIEW BANNER -->
+    <div class="graphic-container">
+      <svg class="graphic-svg" viewBox="0 0 300 150" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 10 10 L 290 10 M 10 50 L 290 50 M 10 90 L 290 90 M 10 130 L 290 130" stroke="#252525" stroke-width="1" />
+        <path d="M 50 10 L 50 140 M 150 10 L 150 140 M 250 10 L 250 140" stroke="#252525" stroke-width="1" />
+        
+        <path d="M 40 110 L 100 110 Q 130 110 140 80 L 160 30 Q 170 10 210 20 L 250 40 Q 280 60 260 100 L 220 120 Q 180 140 130 120 L 60 120 Q 20 110 40 110 Z" 
+              fill="none" stroke="#333" stroke-width="8" stroke-linejoin="round" />
+        <path d="M 40 110 L 100 110 Q 130 110 140 80 L 160 30 Q 170 10 210 20 L 250 40 Q 280 60 260 100 L 220 120 Q 180 140 130 120 L 60 120 Q 20 110 40 110 Z" 
+              fill="none" stroke="#e10600" stroke-width="3" stroke-dasharray="8 4" stroke-linejoin="round" />
+        
+        <circle cx="160" cy="30" r="5" fill="#00e676" />
+        <circle cx="260" cy="100" r="5" fill="#00e676" />
+        <circle cx="40" cy="110" r="5" fill="#ffffff" />
+      </svg>
+
+      <div class="graphic-text">
+        <h2>Pit Wall Strategy Engine</h2>
+        <p>Sanfelice connects directly to live OpenF1 broadcast telemetry streams to calculate position deltas, pit lane loss estimations, stint degradation slopes, and steward incident tracking in real time.</p>
+      </div>
+    </div>
+
+    <!-- MAIN HUB CARDS -->
     <div class="card-grid">
       
-      <!-- LIVE DASHBOARD CARD -->
+      <!-- LIVE HUB -->
       <a href="/live" class="hub-card">
         <div>
           <h2>🔴 Live Wall Telemetry</h2>
-          <p>Real-time session tracker featuring interval deltas, tire compound age, pit lane exit loss predictions, and live steward notices.</p>
+          <p>Active session tracker featuring live position intervals, lap charts with safety car annotations, pit window prediction, and steward notifications.</p>
         </div>
         <span class="btn">Launch Live Hub</span>
       </a>
 
-      <!-- HISTORICAL VAULT CARD -->
+      <!-- HISTORICAL VAULT -->
       <a href="/historical" class="hub-card">
         <div>
-          <h2>📜 Historical Analysis Vault</h2>
-          <p>Post-race analytics engine. Filter by team or driver to dissect race classifications, pit stop times, sector deltas, and pace degradation.</p>
+          <h2>📜 Historical Vault</h2>
+          <p>Complete post-race analysis suite. Automatically populates the latest completed event with team/driver filters, sector deltas, and sortable tables.</p>
         </div>
         <span class="btn">Enter Historical Vault</span>
       </a>
 
     </div>
+
+    <!-- FEATURE HIGHLIGHTS -->
+    <div class="features-grid">
+      <div class="feature-item">
+        <h3>⏱️ Sector Delta Analysis</h3>
+        <p>Calculates theoretical ideal laps per driver and computes real-time sector gaps to pole pace.</p>
+      </div>
+      <div class="feature-item">
+        <h3>🔧 Pit Stop Duration</h3>
+        <p>Tracks overall pit lane travel time vs stationary stop times with estimated pit exit re-entry deltas.</p>
+      </div>
+      <div class="feature-item">
+        <h3>🧪 Long Run Degradation</h3>
+        <p>Simulates tire wear slopes ($\Delta t\text{ / lap}$) across consecutive stint runs to forecast degradation thresholds.</p>
+      </div>
+      <div class="feature-item">
+        <h3>⚠️ Incident Resolution</h3>
+        <p>Parses official race control notices to pinpoint specific driver penalties and track-wide flag warnings.</p>
+      </div>
+    </div>
+
   </main>
 
   <footer>
-    <p>Powered by OpenF1 API & Scuderia San Felice Analytics</p>
+    <p>Powered by OpenF1 API & Sanfelice Analytics</p>
   </footer>
 
 </body>
