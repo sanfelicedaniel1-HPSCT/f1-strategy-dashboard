@@ -3,145 +3,157 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>F1 Pro Strategy Dashboard</title>
-  <!-- Chart.js and Annotation Plugin -->
+  <title>F1 Live Hub — Scuderia San Felice</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background: #121212; color: #fff; }
+    nav { display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+    nav a { color: #888; text-decoration: none; font-weight: bold; font-size: 1.1rem; }
+    nav a.active { color: #e10600; border-bottom: 2px solid #e10600; padding-bottom: 8px; }
     h1, h2 { color: #e10600; margin-bottom: 5px; }
-    .controls { margin: 15px 0; display: flex; gap: 15px; flex-wrap: wrap; }
-    select { padding: 8px; border-radius: 4px; background: #222; color: #fff; border: 1px solid #444; }
-    .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-    .chart-container { position: relative; height: 420px; width: 100%; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #333; font-size: 0.95rem; }
+    .card { background: #1e1e1e; padding: 25px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+    .chart-container { position: relative; height: 420px; width: 100%; text-align: left; }
+    #countdown-box { font-size: 2.5rem; font-weight: bold; margin: 20px 0; color: #00e676; letter-spacing: 2px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: left; }
+    th, td { padding: 8px; border-bottom: 1px solid #333; font-size: 0.95rem; }
     th { color: #888; }
+    .hidden { display: none; }
   </style>
 </head>
 <body>
 
-  <h1>🏎️ F1 Live Strategy Dashboard</h1>
-  <p id="session-info">Loading session...</p>
+  <nav>
+    <a href="/" class="active">🔴 Live Session & Countdown</a>
+    <a href="/historical">📜 Historical Vault</a>
+  </nav>
 
-  <div class="controls">
-    <label>
-      Filter Drivers:
-      <select id="driver-select" multiple size="5" onchange="renderDashboard()"></select>
-    </label>
+  <!-- COUNTDOWN CARD (Shown when offline) -->
+  <div id="countdown-card" class="card hidden">
+    <h2>⏳ Next F1 Session Countdown</h2>
+    <p id="next-session-title">Checking F1 Schedule...</p>
+    <div id="countdown-box">00d 00h 00m 00s</div>
   </div>
 
-  <div class="card">
-    <h2>Lap Pace & Race Control Events</h2>
-    <div class="chart-container">
-      <canvas id="lapChart"></canvas>
+  <!-- LIVE DASHBOARD CARD (Shown when race is active) -->
+  <div id="live-dashboard" class="hidden">
+    <div class="card" style="text-align: left;">
+      <h2>🔴 LIVE TELEMETRY STREAM</h2>
+      <p id="session-info">Connecting to pit wall telemetry...</p>
     </div>
-  </div>
 
-  <div class="card">
-    <h2>Strategy, Intervals & Top Speeds</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Driver</th>
-          <th>Avg Pace</th>
-          <th>Tire (Age)</th>
-          <th>Gap to Lead</th>
-          <th>Interval Ahead</th>
-          <th>Est Pit Exit Delta</th>
-          <th>Max Speed</th>
-          <th>Pits</th>
-        </tr>
-      </thead>
-      <tbody id="strategy-table"></tbody>
-    </table>
+    <div class="card" style="text-align: left;">
+      <h2>Live Lap Pace & Track Status</h2>
+      <div class="chart-container"><canvas id="lapChart"></canvas></div>
+    </div>
+
+    <div class="card" style="text-align: left;">
+      <h2>Live Standings & Intervals</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Driver</th><th>Avg Pace</th><th>Tire (Age)</th><th>Gap to Lead</th>
+            <th>Interval</th><th>Pit Exit Delta</th><th>Max Speed</th>
+          </tr>
+        </thead>
+        <tbody id="strategy-table"></tbody>
+      </table>
+    </div>
   </div>
 
   <script>
     let sessionKey = null, driversMap = {}, lapsData = [], intervalsData = [], raceControlData = [], chartInstance = null;
     const PIT_LOSS_SECONDS = 22.0;
 
-    async function init() {
+    async function checkLiveStatus() {
       try {
-        const sessionRes = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
-        const session = (await sessionRes.json())[0];
-        sessionKey = session.session_key;
+        const now = new Date().toISOString();
+        // Query OpenF1 for current active sessions
+        const res = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
+        const sessions = await res.json();
         
-        document.getElementById('session-info').innerText = 
-          `${session.location} GP - ${session.session_name} (${session.year})`;
+        if (!sessions.length) {
+          showCountdown(null);
+          return;
+        }
 
-        await Promise.all([fetchDrivers(), fetchLaps(), fetchIntervals(), fetchRaceControl()]);
-        populateDriverSelect();
-        renderDashboard();
+        const latestSession = sessions[0];
+        const sessionEnd = new Date(latestSession.date_end);
+        const sessionStart = new Date(latestSession.date_start);
+
+        // Check if session is happening right now (or ended within last 30 mins)
+        if (new Date() >= sessionStart && new Date() <= new Date(sessionEnd.getTime() + 30 * 60000)) {
+          document.getElementById('live-dashboard').classList.remove('hidden');
+          document.getElementById('countdown-card').classList.add('hidden');
+          sessionKey = latestSession.session_key;
+          document.getElementById('session-info').innerText = `${latestSession.location} GP - ${latestSession.session_name} (${latestSession.year})`;
+          initLiveDashboard();
+        } else {
+          showCountdown(latestSession);
+        }
       } catch (err) {
-        console.error("Error loading OpenF1 data:", err);
+        console.error("Schedule check failed:", err);
       }
     }
 
-    async function fetchDrivers() {
-      const res = await fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`);
-      (await res.json()).forEach(d => driversMap[d.driver_number] = d);
-    }
+    function showCountdown(nextSession) {
+      document.getElementById('countdown-card').classList.remove('hidden');
+      document.getElementById('live-dashboard').classList.add('hidden');
 
-    async function fetchLaps() {
-      const res = await fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`);
-      lapsData = await res.json();
-    }
+      // Target future date (default mock offset if API date passed)
+      let targetDate = nextSession ? new Date(nextSession.date_start) : new Date(Date.now() + 86400000 * 3);
+      if (targetDate <= new Date()) targetDate = new Date(Date.now() + 86400000 * 3);
 
-    async function fetchIntervals() {
-      const res = await fetch(`https://api.openf1.org/v1/intervals?session_key=${sessionKey}`);
-      intervalsData = await res.json();
-    }
+      if (nextSession) {
+        document.getElementById('next-session-title').innerText = `${nextSession.location} GP — ${nextSession.session_name}`;
+      }
 
-    async function fetchRaceControl() {
-      const res = await fetch(`https://api.openf1.org/v1/race_control?session_key=${sessionKey}`);
-      raceControlData = await res.json();
-    }
-
-    function populateDriverSelect() {
-      const select = document.getElementById('driver-select');
-      select.innerHTML = '<option value="ALL" selected>All Drivers</option>';
+      function updateTimer() {
+        const diff = targetDate - new Date();
+        if (diff <= 0) {
+          location.reload();
+          return;
+        }
+        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const m = Math.floor((diff / 1000 / 60) % 60);
+        const s = Math.floor((diff / 1000) % 60);
+        document.getElementById('countdown-box').innerText = 
+          `${String(d).padStart(2,'0')}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
+      }
       
-      Object.values(driversMap).forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d.driver_number;
-        opt.innerText = `#${d.driver_number} - ${d.broadcast_name}`;
-        select.appendChild(opt);
-      });
+      updateTimer();
+      setInterval(updateTimer, 1000);
     }
 
-    function renderDashboard() {
-      const selectedOpts = Array.from(document.getElementById('driver-select').selectedOptions).map(o => o.value);
-      let filteredDriverNums = selectedOpts.includes('ALL') ? Object.keys(driversMap) : selectedOpts;
-      updateChart(filteredDriverNums);
-      updateTable(filteredDriverNums);
+    async function initLiveDashboard() {
+      await loadLiveData();
+      // Auto-poll live data every 15 seconds during active sessions
+      setInterval(loadLiveData, 15000);
     }
 
-    function getFlagAnnotations() {
-      const annotations = {};
-      let idx = 0;
+    async function loadLiveData() {
+      const [dRes, lRes, iRes, rRes] = await Promise.all([
+        fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`),
+        fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`),
+        fetch(`https://api.openf1.org/v1/intervals?session_key=${sessionKey}`),
+        fetch(`https://api.openf1.org/v1/race_control?session_key=${sessionKey}`)
+      ]);
 
-      raceControlData.filter(rc => rc.category === 'Flag' || rc.flag?.includes('SAFETY CAR')).forEach(event => {
-        if (!event.lap_number) return;
+      (await dRes.json()).forEach(d => driversMap[d.driver_number] = d);
+      lapsData = await lRes.json();
+      intervalsData = await iRes.json();
+      raceControlData = await rRes.json();
 
-        let color = 'rgba(255, 215, 0, 0.15)';
-        if (event.flag === 'VIRTUAL SAFETY CAR' || event.message?.includes('VSC')) color = 'rgba(255, 140, 0, 0.2)';
-        else if (event.flag === 'SAFETY CAR' || event.message?.includes('SAFETY CAR')) color = 'rgba(255, 215, 0, 0.3)';
-        else if (event.flag === 'RED') color = 'rgba(220, 53, 69, 0.3)';
-
-        annotations[`flag_${idx++}`] = {
-          type: 'box', xMin: event.lap_number - 0.5, xMax: event.lap_number + 0.5, backgroundColor: color, borderWidth: 0
-        };
-      });
-
-      return annotations;
+      renderLiveChart();
+      renderLiveTable();
     }
 
-    function updateChart(driverNums) {
+    function renderLiveChart() {
+      const driverNums = Object.keys(driversMap);
       const datasets = driverNums.map(num => {
         const dLaps = lapsData.filter(l => l.driver_number == num && l.lap_duration);
         const driver = driversMap[num] || { broadcast_name: num, team_colour: 'FFFFFF' };
-
         return {
           label: driver.broadcast_name,
           data: dLaps.map(l => ({ x: l.lap_number, y: l.lap_duration })),
@@ -154,53 +166,36 @@
       });
 
       if (chartInstance) chartInstance.destroy();
-
-      const ctx = document.getElementById('lapChart').getContext('2d');
-      chartInstance = new Chart(ctx, {
+      chartInstance = new Chart(document.getElementById('lapChart').getContext('2d'), {
         type: 'line',
         data: { datasets },
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { annotation: { annotations: getFlagAnnotations() } },
           scales: {
             x: { type: 'linear', title: { display: true, text: 'Lap Number', color: '#888' } },
-            y: { title: { display: true, text: 'Lap Time (Seconds)', color: '#888' } }
+            y: { title: { display: true, text: 'Lap Time (s)', color: '#888' } }
           }
         }
       });
     }
 
-    function updateTable(driverNums) {
+    function renderLiveTable() {
       const tbody = document.getElementById('strategy-table');
       tbody.innerHTML = '';
-
-      driverNums.forEach(num => {
+      Object.keys(driversMap).forEach(num => {
         const dLaps = lapsData.filter(l => l.driver_number == num);
         if (!dLaps.length) return;
-
         const driver = driversMap[num];
         const validLaps = dLaps.filter(l => l.lap_duration);
         const avgLap = (validLaps.reduce((acc, l) => acc + l.lap_duration, 0) / validLaps.length).toFixed(2);
         const latestLap = dLaps[dLaps.length - 1];
-        const pitStops = dLaps.filter(l => l.is_pit_out_lap).length;
-
         const dIntervals = intervalsData.filter(i => i.driver_number == num);
         const latestInterval = dIntervals.length ? dIntervals[dIntervals.length - 1] : null;
-        
-        const gapToLeader = latestInterval?.gap_to_leader !== undefined 
-          ? (latestInterval.gap_to_leader === 0 ? 'LEADER' : `+${latestInterval.gap_to_leader}s`)
-          : 'N/A';
 
-        const intervalAhead = latestInterval?.interval !== undefined 
-          ? (latestInterval.interval === 0 ? '-' : `+${latestInterval.interval}s`)
-          : 'N/A';
-
-        let pitExitDelta = 'N/A';
-        if (latestInterval?.gap_to_leader !== undefined) {
-          pitExitDelta = `+${(latestInterval.gap_to_leader + PIT_LOSS_SECONDS).toFixed(1)}s`;
-        }
-
+        const gapToLeader = latestInterval?.gap_to_leader !== undefined ? (latestInterval.gap_to_leader === 0 ? 'LEADER' : `+${latestInterval.gap_to_leader}s`) : 'N/A';
+        const intervalAhead = latestInterval?.interval !== undefined ? (latestInterval.interval === 0 ? '-' : `+${latestInterval.interval}s`) : 'N/A';
+        const pitExitDelta = latestInterval?.gap_to_leader !== undefined ? `+${(latestInterval.gap_to_leader + PIT_LOSS_SECONDS).toFixed(1)}s` : 'N/A';
         const maxSpeed = Math.max(...dLaps.map(l => l.st_speed || 0));
 
         const tr = document.createElement('tr');
@@ -212,13 +207,12 @@
           <td>${intervalAhead}</td>
           <td style="color: #e10600;">${pitExitDelta}</td>
           <td>${maxSpeed > 0 ? maxSpeed + ' km/h' : 'N/A'}</td>
-          <td>${pitStops}</td>
         `;
         tbody.appendChild(tr);
       });
     }
 
-    init();
+    checkLiveStatus();
   </script>
 </body>
 </html>
