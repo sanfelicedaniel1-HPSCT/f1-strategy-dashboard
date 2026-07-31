@@ -6,8 +6,6 @@
   <title>F1 Live Hub — Scuderia Sanfelice</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1"></script>
-  <!-- Added Chart.js Zoom Plugin -->
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background: #121212; color: #fff; }
     nav { display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
@@ -121,8 +119,6 @@
         <select id="driver-select" multiple size="4" onchange="renderLiveDashboard()"></select>
         <button class="btn-action" onclick="selectAllDrivers()">Select All</button>
         <button class="btn-action" onclick="deselectAllDrivers()">Deselect All</button>
-        <!-- Added Reset Zoom Button -->
-        <button class="btn-action" onclick="resetZoom()" style="background: #333; border-color: #666;">Reset Zoom</button>
       </div>
       <div class="chart-container"><canvas id="lapChart"></canvas></div>
     </div>
@@ -251,6 +247,8 @@
       return [];
     }
 
+    // Sequential fetch with small gaps — avoids the 429 burst that hit the live page
+    // on every 15s poll (7 simultaneous requests × refresh rate = API hammering)
     async function fetchLiveEndpoints(key) {
       const endpoints = [
         { name: 'drivers',      url: `https://api.openf1.org/v1/drivers?session_key=${key}` },
@@ -299,6 +297,7 @@
         } else if (upcomingSession) {
           showCountdown(upcomingSession);
         } else {
+          // No active/upcoming — show the most recent session as a "replay"
           const latest = await fetchWithRetry('https://api.openf1.org/v1/sessions?session_key=latest');
           if (latest && latest.length > 0) {
             startLiveDashboard(latest[0]);
@@ -377,7 +376,7 @@
       clearTimeout(refreshTimer);
       refreshTimer = setTimeout(async () => {
         await loadLiveData();
-        scheduleNextRefresh();
+        scheduleNextRefresh(); // chain the next tick only after current completes
       }, REFRESH_INTERVAL_MS);
     }
 
@@ -440,13 +439,7 @@
       return Array.from(document.getElementById('driver-select').selectedOptions).map(o => String(o.value));
     }
 
-    function resetZoom() {
-      if (chartInstance) {
-        chartInstance.resetZoom();
-      }
-    }
-
-    // ─── Render functions ─────────────────────────────────────────────────────
+    // ─── Render functions (unchanged from original) ───────────────────────────
     function renderKPIs() {
       const validLaps = lapsData.filter(l => l.lap_duration && l.lap_duration > 50 && l.lap_duration < MAX_CLEAN_LAP_TIME);
       if (validLaps.length) {
@@ -552,25 +545,7 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { 
-            annotation: { annotations: getRaceControlAnnotations() },
-            // Zoom Plugin Configuration
-            zoom: {
-              pan: {
-                enabled: true,
-                mode: 'xy' // Allows panning horizontally and vertically
-              },
-              zoom: {
-                wheel: {
-                  enabled: true, // Enables zooming via mouse scroll wheel
-                },
-                pinch: {
-                  enabled: true // Enables pinch-to-zoom on touch devices
-                },
-                mode: 'xy', // Allows zooming on both X and Y axes simultaneously
-              }
-            }
-          },
+          plugins: { annotation: { annotations: getRaceControlAnnotations() } },
           scales: {
             x: { type: 'linear', title: { display: true, text: 'Lap Number', color: '#888' } },
             y: { title: { display: true, text: 'Lap Time (s)', color: '#888' }, suggestedMax: 140 }
