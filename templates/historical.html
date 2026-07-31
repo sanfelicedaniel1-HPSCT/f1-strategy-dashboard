@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>F1 Historical Vault — Scuderia San Felice</title>
+  <title>F1 Historical Vault — Scuderia Sanfelice</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1"></script>
   <style>
@@ -48,7 +48,8 @@
 <body>
 
   <nav>
-    <a href="/">🔴 Live Session & Countdown</a>
+    <a href="/">🏠 Home</a>
+    <a href="/live">🔴 Live Session & Countdown</a>
     <a href="/historical" class="active">📜 Historical Vault</a>
   </nav>
 
@@ -229,7 +230,6 @@
           const latest = latestArr[0];
           yearSelect.value = latest.year || currentYear;
           document.getElementById('type-select').value = latest.session_type || 'Race';
-          
           await loadSessions(true, String(latest.session_key));
         } else {
           await loadSessions(true);
@@ -325,7 +325,6 @@
 
     function adjustLayoutForSessionType() {
       const sType = document.getElementById('type-select').value;
-      
       const raceClass = document.getElementById('section-race-classification');
       const racePits = document.getElementById('section-race-pits');
       const practiceRuns = document.getElementById('section-practice-runs');
@@ -353,10 +352,8 @@
       driverSelect.innerHTML = '<option value="ALL">All Drivers</option>';
 
       const teams = new Set();
-
       Object.values(driversMap).forEach(d => {
         if (d.team_name) teams.add(d.team_name);
-
         const opt = document.createElement('option');
         opt.value = String(d.driver_number);
         opt.innerText = `#${d.driver_number} - ${d.broadcast_name || d.full_name || d.driver_number}`;
@@ -736,7 +733,6 @@
       });
     }
 
-    // GENERAL TABLE SORTING ENGINE
     const tableSortStates = {};
 
     function sortTable(tableId, colIndex) {
@@ -785,7 +781,6 @@
 
     function parseSortValue(text) {
       if (!text) return '';
-      
       const pMatch = text.match(/^P(\d+)/i);
       if (pMatch) return Number(pMatch[1]);
 

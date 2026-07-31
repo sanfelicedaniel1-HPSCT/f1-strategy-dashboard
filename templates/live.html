@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>F1 Live Hub — Scuderia San Felice</title>
+  <title>F1 Live Hub — Scuderia Sanfelice</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1"></script>
   <style>
@@ -42,7 +42,8 @@
 <body>
 
   <nav>
-    <a href="/" class="active">🔴 Live Session & Countdown</a>
+    <a href="/">🏠 Home</a>
+    <a href="/live" class="active">🔴 Live Session & Countdown</a>
     <a href="/historical">📜 Historical Vault</a>
   </nav>
 
@@ -306,7 +307,7 @@
         intervalsData = (await iRes.json()) || [];
         raceControlData = (await rRes.json()) || [];
         stintsData = (await sRes.json()) || [];
-        pitData = (await pitRes.json()) || [];
+        pitData = (await pRes.json()) || [];
         overtakesData = (await oRes.json()) || [];
 
         renderKPIs();
@@ -674,7 +675,6 @@
       });
     }
 
-    // GENERAL TABLE SORTING ENGINE
     const tableSortStates = {};
 
     function sortTable(tableId, colIndex) {
@@ -723,7 +723,6 @@
 
     function parseSortValue(text) {
       if (!text) return '';
-      
       const pMatch = text.match(/^P(\d+)/i);
       if (pMatch) return Number(pMatch[1]);
 
