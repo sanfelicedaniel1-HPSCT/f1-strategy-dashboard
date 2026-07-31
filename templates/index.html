@@ -1,200 +1,224 @@
-&lt;!DOCTYPE html&gt;
-&lt;html lang=&quot;en&quot;&gt;
-&lt;head&gt;
-&lt;meta charset=&quot;UTF-8&quot;&gt;
-&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
-&lt;title&gt;F1 Pro Strategy Dashboard&lt;/title&gt;
-&lt;script src=&quot;https://cdn.jsdelivr.net/npm/chart.js&quot;&gt;&lt;/script&gt;
-&lt;script src=&quot;https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1&quot;&gt;&lt;/script&gt;
-&lt;style&gt;
-body { font-family: system-ui, sans-serif; margin: 20px; background: #121212; color:
-#fff; }
-h1, h2 { color: #e10600; margin-bottom: 5px; }
-.controls { margin: 15px 0; display: flex; gap: 15px; flex-wrap: wrap; }
-select { padding: 8px; border-radius: 4px; background: #222; color: #fff; border: 1px
-solid #444; }
-.card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-.chart-container { position: relative; height: 420px; width: 100%; }
-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-th, td { text-align: left; padding: 8px; border-bottom: 1px solid #333; font-size:
-0.95rem; }
-th { color: #888; }
-&lt;/style&gt;
-&lt;/head&gt;
-&lt;body&gt;
-&lt;h1&gt;��️ F1 Live Strategy Dashboard&lt;/h1&gt;
-&lt;p id=&quot;session-info&quot;&gt;Loading session...&lt;/p&gt;
-&lt;div class=&quot;controls&quot;&gt;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>F1 Pro Strategy Dashboard</title>
+  <!-- Chart.js and Annotation Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background: #121212; color: #fff; }
+    h1, h2 { color: #e10600; margin-bottom: 5px; }
+    .controls { margin: 15px 0; display: flex; gap: 15px; flex-wrap: wrap; }
+    select { padding: 8px; border-radius: 4px; background: #222; color: #fff; border: 1px solid #444; }
+    .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+    .chart-container { position: relative; height: 420px; width: 100%; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #333; font-size: 0.95rem; }
+    th { color: #888; }
+  </style>
+</head>
+<body>
 
-&lt;label&gt;Filter Drivers:
-&lt;select id=&quot;driver-select&quot; multiple size=&quot;5&quot; onchange=&quot;renderDashboard()&quot;&gt;&lt;/select&gt;
-&lt;/label&gt;
-&lt;/div&gt;
-&lt;div class=&quot;card&quot;&gt;
-&lt;h2&gt;Lap Pace &amp; Race Control Events&lt;/h2&gt;
-&lt;div class=&quot;chart-container&quot;&gt;&lt;canvas id=&quot;lapChart&quot;&gt;&lt;/canvas&gt;&lt;/div&gt;
-&lt;/div&gt;
-&lt;div class=&quot;card&quot;&gt;
-&lt;h2&gt;Strategy, Intervals &amp; Top Speeds&lt;/h2&gt;
-&lt;table&gt;
-&lt;thead&gt;
-&lt;tr&gt;
-&lt;th&gt;Driver&lt;/th&gt;&lt;th&gt;Avg Pace&lt;/th&gt;&lt;th&gt;Tire (Age)&lt;/th&gt;&lt;th&gt;Gap to Lead&lt;/th&gt;
-&lt;th&gt;Interval Ahead&lt;/th&gt;&lt;th&gt;Est Pit Exit Delta&lt;/th&gt;&lt;th&gt;Max
-Speed&lt;/th&gt;&lt;th&gt;Pits&lt;/th&gt;
-&lt;/tr&gt;
-&lt;/thead&gt;
-&lt;tbody id=&quot;strategy-table&quot;&gt;&lt;/tbody&gt;
-&lt;/table&gt;
-&lt;/div&gt;
-&lt;script&gt;
-let sessionKey = null, driversMap = {}, lapsData = [], intervalsData = [],
-raceControlData = [], chartInstance = null;
-const PIT_LOSS_SECONDS = 22.0;
-async function init() {
-try {
-const sessionRes = await
-fetch(&#39;https://api.openf1.org/v1/sessions?session_key=latest&#39;);
-const session = (await sessionRes.json())[0];
-sessionKey = session.session_key;
-document.getElementById(&#39;session-info&#39;).innerText = `${session.location} GP -
-${session.session_name} (${session.year})`;
-await Promise.all([fetchDrivers(), fetchLaps(), fetchIntervals(),
-fetchRaceControl()]);
-populateDriverSelect();
-renderDashboard();
-} catch (err) { console.error(&quot;Error loading OpenF1 data:&quot;, err); }
-}
-async function fetchDrivers() {
-const res = await
-fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`);
-(await res.json()).forEach(d =&gt; driversMap[d.driver_number] = d);
-}
-async function fetchLaps() {
-const res = await fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`);
-lapsData = await res.json();
-}
+  <h1>🏎️ F1 Live Strategy Dashboard</h1>
+  <p id="session-info">Loading session...</p>
 
-async function fetchIntervals() {
-const res = await
-fetch(`https://api.openf1.org/v1/intervals?session_key=${sessionKey}`);
-intervalsData = await res.json();
-}
-async function fetchRaceControl() {
-const res = await
-fetch(`https://api.openf1.org/v1/race_control?session_key=${sessionKey}`);
-raceControlData = await res.json();
-}
-function populateDriverSelect() {
-const select = document.getElementById(&#39;driver-select&#39;);
-select.innerHTML = &#39;&lt;option value=&quot;ALL&quot; selected&gt;All Drivers&lt;/option&gt;&#39;;
-Object.values(driversMap).forEach(d =&gt; {
-const opt = document.createElement(&#39;option&#39;);
-opt.value = d.driver_number;
-opt.innerText = `#${d.driver_number} - ${d.broadcast_name}`;
-select.appendChild(opt);
-});
-}
-function renderDashboard() {
-const selectedOpts = Array.from(document.getElementById(&#39;driver-
-select&#39;).selectedOptions).map(o =&gt; o.value);
-let filteredDriverNums = selectedOpts.includes(&#39;ALL&#39;) ? Object.keys(driversMap) :
-selectedOpts;
-updateChart(filteredDriverNums);
-updateTable(filteredDriverNums);
-}
-function getFlagAnnotations() {
-const annotations = {};
-let idx = 0;
-raceControlData.filter(rc =&gt; rc.category === &#39;Flag&#39; || rc.flag?.includes(&#39;SAFETY
-CAR&#39;)).forEach(event =&gt; {
-if (!event.lap_number) return;
-let color = &#39;rgba(255, 215, 0, 0.15)&#39;;
-if (event.flag === &#39;VIRTUAL SAFETY CAR&#39; || event.message?.includes(&#39;VSC&#39;)) color =
-&#39;rgba(255, 140, 0, 0.2)&#39;;
-else if (event.flag === &#39;SAFETY CAR&#39; || event.message?.includes(&#39;SAFETY CAR&#39;))
-color = &#39;rgba(255, 215, 0, 0.3)&#39;;
-else if (event.flag === &#39;RED&#39;) color = &#39;rgba(220, 53, 69, 0.3)&#39;;
-annotations[`flag_${idx++}`] = {
-type: &#39;box&#39;, xMin: event.lap_number - 0.5, xMax: event.lap_number + 0.5,
-backgroundColor: color, borderWidth: 0
-};
-});
-return annotations;
-}
-function updateChart(driverNums) {
-const datasets = driverNums.map(num =&gt; {
+  <div class="controls">
+    <label>
+      Filter Drivers:
+      <select id="driver-select" multiple size="5" onchange="renderDashboard()"></select>
+    </label>
+  </div>
 
-const dLaps = lapsData.filter(l =&gt; l.driver_number == num &amp;&amp; l.lap_duration);
-const driver = driversMap[num] || { broadcast_name: num, team_colour: &#39;FFFFFF&#39; };
-return {
-label: driver.broadcast_name,
-data: dLaps.map(l =&gt; ({ x: l.lap_number, y: l.lap_duration })),
-borderColor: `#${driver.team_colour || &#39;ffffff&#39;}`,
-backgroundColor: `#${driver.team_colour || &#39;ffffff&#39;}`,
-tension: 0.1,
-pointRadius: dLaps.map(l =&gt; l.is_pit_out_lap ? 7 : 2),
-pointStyle: dLaps.map(l =&gt; l.is_pit_out_lap ? &#39;rectRot&#39; : &#39;circle&#39;)
-};
-});
-if (chartInstance) chartInstance.destroy();
-chartInstance = new Chart(document.getElementById(&#39;lapChart&#39;).getContext(&#39;2d&#39;), {
-type: &#39;line&#39;, data: { datasets },
-options: {
-responsive: true, maintainAspectRatio: false,
-plugins: { annotation: { annotations: getFlagAnnotations() } },
-scales: {
-x: { type: &#39;linear&#39;, title: { display: true, text: &#39;Lap Number&#39;, color: &#39;#888&#39;
-} },
-y: { title: { display: true, text: &#39;Lap Time (Seconds)&#39;, color: &#39;#888&#39; } }
-}
-}
-});
-}
-function updateTable(driverNums) {
-const tbody = document.getElementById(&#39;strategy-table&#39;);
-tbody.innerHTML = &#39;&#39;;
-driverNums.forEach(num =&gt; {
-const dLaps = lapsData.filter(l =&gt; l.driver_number == num);
-if (!dLaps.length) return;
-const driver = driversMap[num];
-const validLaps = dLaps.filter(l =&gt; l.lap_duration);
-const avgLap = (validLaps.reduce((acc, l) =&gt; acc + l.lap_duration, 0) /
-validLaps.length).toFixed(2);
-const latestLap = dLaps[dLaps.length - 1];
-const pitStops = dLaps.filter(l =&gt; l.is_pit_out_lap).length;
-const dIntervals = intervalsData.filter(i =&gt; i.driver_number == num);
-const latestInterval = dIntervals.length ? dIntervals[dIntervals.length - 1] :
-null;
-const gapToLeader = latestInterval?.gap_to_leader !== undefined
-? (latestInterval.gap_to_leader === 0 ? &#39;LEADER&#39; :
-`+${latestInterval.gap_to_leader}s`) : &#39;N/A&#39;;
-const intervalAhead = latestInterval?.interval !== undefined
-? (latestInterval.interval === 0 ? &#39;-&#39; : `+${latestInterval.interval}s`) :
-&#39;N/A&#39;;
-let pitExitDelta = &#39;N/A&#39;;
-if (latestInterval?.gap_to_leader !== undefined) {
+  <div class="card">
+    <h2>Lap Pace & Race Control Events</h2>
+    <div class="chart-container">
+      <canvas id="lapChart"></canvas>
+    </div>
+  </div>
 
-pitExitDelta = `+${(latestInterval.gap_to_leader +
-PIT_LOSS_SECONDS).toFixed(1)}s`;
-}
-const maxSpeed = Math.max(...dLaps.map(l =&gt; l.st_speed || 0));
-const tr = document.createElement(&#39;tr&#39;);
-tr.innerHTML = `
-&lt;td&gt;&lt;strong&gt;${driver ? driver.broadcast_name : num}&lt;/strong&gt;&lt;/td&gt;
-&lt;td&gt;${isNaN(avgLap) ? &#39;N/A&#39; : avgLap + &#39;s&#39;}&lt;/td&gt;
-&lt;td&gt;${latestLap?.compound || &#39;Unk&#39;} (${latestLap?.tyre_age_at_start || 0}
-L)&lt;/td&gt;
-&lt;td&gt;${gapToLeader}&lt;/td&gt;
-&lt;td&gt;${intervalAhead}&lt;/td&gt;
-&lt;td style=&quot;color: #e10600;&quot;&gt;${pitExitDelta}&lt;/td&gt;
-&lt;td&gt;${maxSpeed &gt; 0 ? maxSpeed + &#39; km/h&#39; : &#39;N/A&#39;}&lt;/td&gt;
-&lt;td&gt;${pitStops}&lt;/td&gt;
-`;
-tbody.appendChild(tr);
-});
-}
-init();
-&lt;/script&gt;
-&lt;/body&gt;
-&lt;/html&gt;
+  <div class="card">
+    <h2>Strategy, Intervals & Top Speeds</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Driver</th>
+          <th>Avg Pace</th>
+          <th>Tire (Age)</th>
+          <th>Gap to Lead</th>
+          <th>Interval Ahead</th>
+          <th>Est Pit Exit Delta</th>
+          <th>Max Speed</th>
+          <th>Pits</th>
+        </tr>
+      </thead>
+      <tbody id="strategy-table"></tbody>
+    </table>
+  </div>
+
+  <script>
+    let sessionKey = null, driversMap = {}, lapsData = [], intervalsData = [], raceControlData = [], chartInstance = null;
+    const PIT_LOSS_SECONDS = 22.0;
+
+    async function init() {
+      try {
+        const sessionRes = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
+        const session = (await sessionRes.json())[0];
+        sessionKey = session.session_key;
+        
+        document.getElementById('session-info').innerText = 
+          `${session.location} GP - ${session.session_name} (${session.year})`;
+
+        await Promise.all([fetchDrivers(), fetchLaps(), fetchIntervals(), fetchRaceControl()]);
+        populateDriverSelect();
+        renderDashboard();
+      } catch (err) {
+        console.error("Error loading OpenF1 data:", err);
+      }
+    }
+
+    async function fetchDrivers() {
+      const res = await fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`);
+      (await res.json()).forEach(d => driversMap[d.driver_number] = d);
+    }
+
+    async function fetchLaps() {
+      const res = await fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`);
+      lapsData = await res.json();
+    }
+
+    async function fetchIntervals() {
+      const res = await fetch(`https://api.openf1.org/v1/intervals?session_key=${sessionKey}`);
+      intervalsData = await res.json();
+    }
+
+    async function fetchRaceControl() {
+      const res = await fetch(`https://api.openf1.org/v1/race_control?session_key=${sessionKey}`);
+      raceControlData = await res.json();
+    }
+
+    function populateDriverSelect() {
+      const select = document.getElementById('driver-select');
+      select.innerHTML = '<option value="ALL" selected>All Drivers</option>';
+      
+      Object.values(driversMap).forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.driver_number;
+        opt.innerText = `#${d.driver_number} - ${d.broadcast_name}`;
+        select.appendChild(opt);
+      });
+    }
+
+    function renderDashboard() {
+      const selectedOpts = Array.from(document.getElementById('driver-select').selectedOptions).map(o => o.value);
+      let filteredDriverNums = selectedOpts.includes('ALL') ? Object.keys(driversMap) : selectedOpts;
+      updateChart(filteredDriverNums);
+      updateTable(filteredDriverNums);
+    }
+
+    function getFlagAnnotations() {
+      const annotations = {};
+      let idx = 0;
+
+      raceControlData.filter(rc => rc.category === 'Flag' || rc.flag?.includes('SAFETY CAR')).forEach(event => {
+        if (!event.lap_number) return;
+
+        let color = 'rgba(255, 215, 0, 0.15)';
+        if (event.flag === 'VIRTUAL SAFETY CAR' || event.message?.includes('VSC')) color = 'rgba(255, 140, 0, 0.2)';
+        else if (event.flag === 'SAFETY CAR' || event.message?.includes('SAFETY CAR')) color = 'rgba(255, 215, 0, 0.3)';
+        else if (event.flag === 'RED') color = 'rgba(220, 53, 69, 0.3)';
+
+        annotations[`flag_${idx++}`] = {
+          type: 'box', xMin: event.lap_number - 0.5, xMax: event.lap_number + 0.5, backgroundColor: color, borderWidth: 0
+        };
+      });
+
+      return annotations;
+    }
+
+    function updateChart(driverNums) {
+      const datasets = driverNums.map(num => {
+        const dLaps = lapsData.filter(l => l.driver_number == num && l.lap_duration);
+        const driver = driversMap[num] || { broadcast_name: num, team_colour: 'FFFFFF' };
+
+        return {
+          label: driver.broadcast_name,
+          data: dLaps.map(l => ({ x: l.lap_number, y: l.lap_duration })),
+          borderColor: `#${driver.team_colour || 'ffffff'}`,
+          backgroundColor: `#${driver.team_colour || 'ffffff'}`,
+          tension: 0.1,
+          pointRadius: dLaps.map(l => l.is_pit_out_lap ? 7 : 2),
+          pointStyle: dLaps.map(l => l.is_pit_out_lap ? 'rectRot' : 'circle')
+        };
+      });
+
+      if (chartInstance) chartInstance.destroy();
+
+      const ctx = document.getElementById('lapChart').getContext('2d');
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { annotation: { annotations: getFlagAnnotations() } },
+          scales: {
+            x: { type: 'linear', title: { display: true, text: 'Lap Number', color: '#888' } },
+            y: { title: { display: true, text: 'Lap Time (Seconds)', color: '#888' } }
+          }
+        }
+      });
+    }
+
+    function updateTable(driverNums) {
+      const tbody = document.getElementById('strategy-table');
+      tbody.innerHTML = '';
+
+      driverNums.forEach(num => {
+        const dLaps = lapsData.filter(l => l.driver_number == num);
+        if (!dLaps.length) return;
+
+        const driver = driversMap[num];
+        const validLaps = dLaps.filter(l => l.lap_duration);
+        const avgLap = (validLaps.reduce((acc, l) => acc + l.lap_duration, 0) / validLaps.length).toFixed(2);
+        const latestLap = dLaps[dLaps.length - 1];
+        const pitStops = dLaps.filter(l => l.is_pit_out_lap).length;
+
+        const dIntervals = intervalsData.filter(i => i.driver_number == num);
+        const latestInterval = dIntervals.length ? dIntervals[dIntervals.length - 1] : null;
+        
+        const gapToLeader = latestInterval?.gap_to_leader !== undefined 
+          ? (latestInterval.gap_to_leader === 0 ? 'LEADER' : `+${latestInterval.gap_to_leader}s`)
+          : 'N/A';
+
+        const intervalAhead = latestInterval?.interval !== undefined 
+          ? (latestInterval.interval === 0 ? '-' : `+${latestInterval.interval}s`)
+          : 'N/A';
+
+        let pitExitDelta = 'N/A';
+        if (latestInterval?.gap_to_leader !== undefined) {
+          pitExitDelta = `+${(latestInterval.gap_to_leader + PIT_LOSS_SECONDS).toFixed(1)}s`;
+        }
+
+        const maxSpeed = Math.max(...dLaps.map(l => l.st_speed || 0));
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${driver ? driver.broadcast_name : num}</strong></td>
+          <td>${isNaN(avgLap) ? 'N/A' : avgLap + 's'}</td>
+          <td>${latestLap?.compound || 'Unk'} (${latestLap?.tyre_age_at_start || 0} L)</td>
+          <td>${gapToLeader}</td>
+          <td>${intervalAhead}</td>
+          <td style="color: #e10600;">${pitExitDelta}</td>
+          <td>${maxSpeed > 0 ? maxSpeed + ' km/h' : 'N/A'}</td>
+          <td>${pitStops}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>
