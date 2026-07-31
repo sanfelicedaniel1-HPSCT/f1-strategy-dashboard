@@ -6,7 +6,8 @@
   <title>F1 Live Hub — Scuderia Sanfelice</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+  <!-- Added Chart.js Zoom Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background: #121212; color: #fff; }
     nav { display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
@@ -114,15 +115,14 @@
     </div>
 
     <div class="card" style="text-align: left;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h2 style="margin: 0;">Live Pace & Track Events</h2>
-        <button class="btn-action" onclick="resetZoomChart()">Reset Zoom</button>
-      </div>
+      <h2>Live Pace & Track Events</h2>
       <div class="controls">
         <label for="driver-select">Filter Drivers:</label>
         <select id="driver-select" multiple size="4" onchange="renderLiveDashboard()"></select>
         <button class="btn-action" onclick="selectAllDrivers()">Select All</button>
         <button class="btn-action" onclick="deselectAllDrivers()">Deselect All</button>
+        <!-- Added Reset Zoom Button -->
+        <button class="btn-action" onclick="resetZoom()" style="background: #333; border-color: #666;">Reset Zoom</button>
       </div>
       <div class="chart-container"><canvas id="lapChart"></canvas></div>
     </div>
@@ -209,11 +209,11 @@
     let driversMap = {}, lapsData = [], intervalsData = [], raceControlData = [], stintsData = [], pitData = [], overtakesData = [];
     let chartInstance = null;
     let refreshTimer = null;
-    let isFetching = false;
+    let isFetching = false; // guard: prevents overlapping refresh cycles
 
     const PIT_LOSS_SECONDS = 22.0;
     const MAX_CLEAN_LAP_TIME = 180.0;
-    const REFRESH_INTERVAL_MS = 20000;
+    const REFRESH_INTERVAL_MS = 20000; // 20s — polite for a free API
 
     // ─── Fetch helpers ────────────────────────────────────────────────────────
     function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -237,14 +237,15 @@
               await delay(baseDelayMs * Math.pow(2, attempt));
               continue;
             }
+            console.warn(`429 persisted after retries: ${url}`);
             return [];
           }
           hideRateBanner();
-          if (!res.ok) return [];
+          if (!res.ok) { console.warn(`HTTP ${res.status} for ${url}`); return []; }
           return await res.json();
         } catch (err) {
           if (attempt < maxRetries) await delay(baseDelayMs * Math.pow(2, attempt));
-          else return [];
+          else { console.error(`Fetch failed: ${url}`, err); return []; }
         }
       }
       return [];
@@ -270,6 +271,7 @@
       return results;
     }
 
+    // ─── Startup: check for active or upcoming session ────────────────────────
     async function checkNextOrActiveSession() {
       try {
         const currentYear = new Date().getFullYear();
@@ -364,6 +366,7 @@
       setInterval(updateTimer, 1000);
     }
 
+    // ─── Live polling ─────────────────────────────────────────────────────────
     async function initLiveDashboard() {
       await loadLiveData();
       populateDriverSelect();
@@ -410,6 +413,7 @@
       }
     }
 
+    // ─── Driver select ────────────────────────────────────────────────────────
     function populateDriverSelect() {
       const select = document.getElementById('driver-select');
       select.innerHTML = '';
@@ -436,6 +440,13 @@
       return Array.from(document.getElementById('driver-select').selectedOptions).map(o => String(o.value));
     }
 
+    function resetZoom() {
+      if (chartInstance) {
+        chartInstance.resetZoom();
+      }
+    }
+
+    // ─── Render functions ─────────────────────────────────────────────────────
     function renderKPIs() {
       const validLaps = lapsData.filter(l => l.lap_duration && l.lap_duration > 50 && l.lap_duration < MAX_CLEAN_LAP_TIME);
       if (validLaps.length) {
@@ -541,15 +552,22 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: {
+          plugins: { 
             annotation: { annotations: getRaceControlAnnotations() },
+            // Zoom Plugin Configuration
             zoom: {
-              pan: { enabled: true, mode: 'xy' },
+              pan: {
+                enabled: true,
+                mode: 'xy' // Allows panning horizontally and vertically
+              },
               zoom: {
-                wheel: { enabled: true },
-                pinch: { enabled: true },
-                mode: 'xy',
-                drag: { enabled: true, backgroundColor: 'rgba(225,6,0,0.2)' }
+                wheel: {
+                  enabled: true, // Enables zooming via mouse scroll wheel
+                },
+                pinch: {
+                  enabled: true // Enables pinch-to-zoom on touch devices
+                },
+                mode: 'xy', // Allows zooming on both X and Y axes simultaneously
               }
             }
           },
@@ -559,12 +577,6 @@
           }
         }
       });
-    }
-
-    function resetZoomChart() {
-      if (chartInstance && typeof chartInstance.resetZoom === 'function') {
-        chartInstance.resetZoom();
-      }
     }
 
     function renderLiveTable(selectedNums) {
@@ -733,6 +745,7 @@
       });
     }
 
+    // ─── Table sorting ────────────────────────────────────────────────────────
     const tableSortStates = {};
     function sortTable(tableId, colIndex) {
       const table = document.getElementById(tableId);
