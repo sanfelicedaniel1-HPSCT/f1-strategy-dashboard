@@ -204,7 +204,7 @@
       Object.values(driversMap).forEach(d => {
         const opt = document.createElement('option');
         opt.value = d.driver_number;
-        opt.selected = true; // All selected initially
+        opt.selected = true;
         opt.innerText = `#${d.driver_number} - ${d.broadcast_name}`;
         select.appendChild(opt);
       });
@@ -263,6 +263,53 @@
       document.getElementById('kpi-dnfs').innerText = dnfCount;
     }
 
+    // Build Safety Car / VSC / Red Flag annotations for Chart.js
+    function getRaceControlAnnotations() {
+      const annotations = {};
+      let idx = 0;
+
+      if (!raceControlData || !raceControlData.length) return annotations;
+
+      raceControlData.forEach(rc => {
+        if (!rc.lap_number) return;
+
+        let color = null;
+        let labelText = '';
+
+        if (rc.flag === 'RED' || rc.message?.includes('RED FLAG')) {
+          color = 'rgba(220, 53, 69, 0.25)';
+          labelText = 'RED FLAG';
+        } else if (rc.flag === 'SAFETY CAR' || rc.message?.includes('SAFETY CAR')) {
+          color = 'rgba(255, 193, 7, 0.25)';
+          labelText = 'SAFETY CAR';
+        } else if (rc.flag === 'VIRTUAL SAFETY CAR' || rc.message?.includes('VSC')) {
+          color = 'rgba(255, 152, 0, 0.2)';
+          labelText = 'VSC';
+        } else if (rc.flag === 'YELLOW') {
+          color = 'rgba(255, 235, 59, 0.15)';
+        }
+
+        if (color) {
+          annotations[`flag_${idx++}`] = {
+            type: 'box',
+            xMin: rc.lap_number - 0.5,
+            xMax: rc.lap_number + 0.5,
+            backgroundColor: color,
+            borderWidth: 0,
+            label: labelText ? {
+              display: true,
+              content: labelText,
+              color: '#fff',
+              font: { size: 9, weight: 'bold' },
+              position: 'start'
+            } : undefined
+          };
+        }
+      });
+
+      return annotations;
+    }
+
     function renderChart(selectedNums) {
       const datasets = selectedNums.map(num => {
         const dLaps = lapsData.filter(l => l.driver_number == num && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
@@ -285,6 +332,11 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          plugins: {
+            annotation: {
+              annotations: getRaceControlAnnotations()
+            }
+          },
           scales: {
             x: { type: 'linear', title: { display: true, text: 'Lap Number', color: '#888' } },
             y: { title: { display: true, text: 'Lap Time (Seconds)', color: '#888' }, suggestedMax: 140 }
@@ -297,6 +349,11 @@
       const tbody = document.getElementById('classification-table');
       tbody.innerHTML = '';
 
+      if (!selectedNums.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color: #888;">No drivers selected.</td></tr>';
+        return;
+      }
+
       const maxLaps = Math.max(...lapsData.map(l => l.lap_number || 0));
 
       const driverSummary = selectedNums.map(num => {
@@ -305,7 +362,7 @@
         const dPos = positionData.filter(p => p.driver_number == num);
 
         const startPos = dPos.length ? dPos[0].position : 'N/A';
-        const finalPos = dPos.length ? dPos[dPos.length - 1].position : 99;
+        const finalPos = dPos.length ? dPos[dPos.length - 1].position : (dLaps.length ? 100 - dLaps.length : 99);
 
         const validLaps = dLaps.filter(l => l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
         const avgPace = validLaps.length ? (validLaps.reduce((a, b) => a + b.lap_duration, 0) / validLaps.length).toFixed(2) : 'N/A';
@@ -325,7 +382,7 @@
 
       driverSummary.forEach((d, idx) => {
         let posDeltaStr = 'N/A';
-        if (d.startPos !== 'N/A' && d.finalPos !== 99) {
+        if (d.startPos !== 'N/A' && d.finalPos < 90) {
           const delta = d.startPos - d.finalPos;
           if (delta > 0) posDeltaStr = `<span class="pos-gained">▲ +${delta} (P${d.startPos} ➔ P${d.finalPos})</span>`;
           else if (delta < 0) posDeltaStr = `<span class="pos-lost">▼ ${delta} (P${d.startPos} ➔ P${d.finalPos})</span>`;
