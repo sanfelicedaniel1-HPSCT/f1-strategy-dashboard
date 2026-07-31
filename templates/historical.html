@@ -51,16 +51,16 @@
 
   <h1>📜 Session Analysis Vault</h1>
 
-  <!-- UNIFIED TOP CONTROL BAR WITH ALL FILTERS -->
+  <!-- TOP CONTROL BAR -->
   <div class="controls">
     <div class="control-item">
       <label for="year-select">Year</label>
-      <select id="year-select" onchange="loadSessions()"></select>
+      <select id="year-select" onchange="loadSessions(false)"></select>
     </div>
 
     <div class="control-item">
       <label for="type-select">Session Type</label>
-      <select id="type-select" onchange="loadSessions()">
+      <select id="type-select" onchange="loadSessions(false)">
         <option value="Race" selected>Race</option>
         <option value="Qualifying">Qualifying</option>
         <option value="Practice">Practice</option>
@@ -112,7 +112,7 @@
   <!-- PACE GRAPH -->
   <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-      <h2 id="session-title" style="margin: 0;">Auto-loading latest Grand Prix...</h2>
+      <h2 id="session-title" style="margin: 0;">Loading latest event telemetry...</h2>
       <div>
         <button class="btn-action" onclick="selectAllDrivers()">Select All Drivers</button>
         <button class="btn-action" onclick="deselectAllDrivers()">Reset Drivers</button>
@@ -218,8 +218,8 @@
         yearSelect.appendChild(opt);
       }
 
-      // Fetch latest session directly from OpenF1
       try {
+        // Query OpenF1 for the latest session metadata
         const res = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
         const latestArr = await res.json();
         
@@ -228,17 +228,17 @@
           yearSelect.value = latest.year || currentYear;
           document.getElementById('type-select').value = latest.session_type || 'Race';
           
-          await loadSessions(latest.session_key);
+          await loadSessions(true, latest.session_key);
         } else {
-          await loadSessions();
+          await loadSessions(true);
         }
       } catch (err) {
-        console.error("Auto load latest session failed, falling back to manual load:", err);
-        await loadSessions();
+        console.error("Auto load latest session failed, falling back:", err);
+        await loadSessions(true);
       }
     }
 
-    async function loadSessions(targetSessionKey = null) {
+    async function loadSessions(shouldAutoFetchData = false, targetSessionKey = null) {
       const year = document.getElementById('year-select').value;
       const sessionType = document.getElementById('type-select').value;
       
@@ -265,10 +265,13 @@
         if (targetSessionKey) {
           select.value = targetSessionKey;
         } else if (sessions.length > 0) {
-          select.selectedIndex = sessions.length - 1; // Pick most recent event
+          select.selectedIndex = sessions.length - 1; // Pre-select most recent event
         }
 
-        fetchHistoricalData();
+        // Trigger telemetry download immediately without waiting for button click
+        if (shouldAutoFetchData) {
+          fetchHistoricalData();
+        }
       } catch (err) {
         console.error("Failed to fetch sessions:", err);
       }
@@ -276,10 +279,10 @@
 
     async function fetchHistoricalData() {
       const selectEl = document.getElementById('session-select');
-      if (!selectEl.value || selectEl.value === 'No sessions found') return;
+      if (!selectEl || !selectEl.value || selectEl.value === 'No sessions found') return;
 
       const sessionKey = selectEl.value;
-      const sessionTitle = selectEl.selectedOptions[0].innerText;
+      const sessionTitle = selectEl.selectedOptions[0] ? selectEl.selectedOptions[0].innerText : "Latest Event";
       document.getElementById('session-title').innerText = sessionTitle;
 
       try {
