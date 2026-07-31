@@ -14,7 +14,7 @@
     h1, h2, h3 { color: #e10600; margin-bottom: 5px; }
     
     .controls { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; background: #1e1e1e; padding: 15px; border-radius: 8px; align-items: center; }
-    select, button { padding: 10px; border-radius: 4px; background: #222; color: #fff; border: 1px solid #444; font-size: 1rem; }
+    select, input, button { padding: 10px; border-radius: 4px; background: #222; color: #fff; border: 1px solid #444; font-size: 1rem; }
     button { background: #e10600; border: none; cursor: pointer; font-weight: bold; }
     button:hover { background: #ff1e1e; }
     
@@ -37,6 +37,7 @@
     .pos-lost { color: #ff5252; font-weight: bold; }
     .dnf-tag { background: #d32f2f; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.8rem; font-weight: bold; }
     .penalty-box { background: #2a1a1a; border-left: 3px solid #ff5252; padding: 8px 12px; margin-bottom: 8px; border-radius: 4px; font-size: 0.9rem; }
+    .filter-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 15px; background: #252525; padding: 10px; border-radius: 6px; }
     .hidden { display: none; }
   </style>
 </head>
@@ -49,6 +50,7 @@
 
   <h1>📜 Session Analysis Vault</h1>
 
+  <!-- EVENT SELECTOR CONTROLS -->
   <div class="controls">
     <label>Year:
       <select id="year-select" onchange="loadSessions()"></select>
@@ -62,7 +64,7 @@
       </select>
     </label>
 
-    <label>Grand Prix Event:
+    <label>Track / Grand Prix:
       <select id="session-select"></select>
     </label>
 
@@ -89,15 +91,28 @@
     </div>
   </div>
 
-  <!-- MAIN LAP PACE CHART -->
+  <!-- MAIN PACE CHART & FILTERS -->
   <div class="card">
-    <h2 id="session-title">Select an Event Above</h2>
-    <div style="display: flex; gap: 10px; align-items: center; margin: 15px 0;">
-      <label for="driver-select">Filter Drivers:</label>
-      <select id="driver-select" multiple size="4" onchange="renderFilteredViews()"></select>
-      <button class="btn-action" onclick="selectAllDrivers()">Select All</button>
-      <button class="btn-action" onclick="deselectAllDrivers()">Deselect All</button>
+    <h2 id="session-title">Loading Latest Event...</h2>
+    
+    <!-- DRIVER & TEAM FILTERS -->
+    <div class="filter-group">
+      <label>Filter Team:
+        <select id="team-filter" onchange="applyTeamFilter()">
+          <option value="ALL">All Teams</option>
+        </select>
+      </label>
+
+      <label>Filter Drivers:
+        <select id="driver-select" multiple size="4" onchange="renderFilteredViews()"></select>
+      </label>
+      
+      <div style="display: flex; flex-direction: column; gap: 5px;">
+        <button class="btn-action" onclick="selectAllDrivers()">Select All</button>
+        <button class="btn-action" onclick="deselectAllDrivers()">Deselect All</button>
+      </div>
     </div>
+
     <div class="chart-container"><canvas id="lapChart"></canvas></div>
   </div>
 
@@ -137,7 +152,7 @@
     </table>
   </div>
 
-  <!-- QUALIFYING & PRACTICE CARD: SECTOR BREAKDOWN -->
+  <!-- QUALIFYING & PRACTICE CARD: SECTORS -->
   <div id="section-sectors" class="card">
     <h2>⏱️ Sector Analysis & Theoretical Ideal Laps</h2>
     <table>
@@ -156,7 +171,7 @@
     </table>
   </div>
 
-  <!-- PRACTICE SPECIFIC CARD: LONG RUN DEGRADATION -->
+  <!-- PRACTICE SPECIFIC CARD: LONG RUNS -->
   <div id="section-practice-runs" class="card hidden">
     <h2>🧪 Long Run Stint Simulations (5+ Consecutive Laps)</h2>
     <table>
@@ -173,7 +188,7 @@
     </table>
   </div>
 
-  <!-- STEWARD NOTICES & INCIDENTS -->
+  <!-- STEWARD NOTICES -->
   <div class="card">
     <h2>⚠️ Steward Notices & Track Incident Log</h2>
     <div id="penalties-container">
@@ -185,7 +200,7 @@
     let driversMap = {}, lapsData = [], positionData = [], stintsData = [], pitData = [], raceControlData = [], chartInstance = null;
     const MAX_CLEAN_LAP_TIME = 180.0;
 
-    function initYears() {
+    async function initYears() {
       const yearSelect = document.getElementById('year-select');
       const currentYear = new Date().getFullYear();
       yearSelect.innerHTML = '';
@@ -196,10 +211,12 @@
         opt.innerText = y;
         yearSelect.appendChild(opt);
       }
-      loadSessions();
+      
+      // Auto-load sessions for current year and trigger initial analysis for most recent session
+      await loadSessions(true);
     }
 
-    async function loadSessions() {
+    async function loadSessions(isInitialAutoLoad = false) {
       const year = document.getElementById('year-select').value;
       const sessionType = document.getElementById('type-select').value;
       
@@ -219,9 +236,15 @@
         sessions.forEach(s => {
           const opt = document.createElement('option');
           opt.value = s.session_key;
-          opt.innerText = `${s.location} GP — ${s.session_name}`;
+          opt.innerText = `${s.circuit_short_name || s.location} GP — ${s.session_name}`;
           select.appendChild(opt);
         });
+
+        // Automatically select and load the most recent session on initial landing
+        if (isInitialAutoLoad && sessions.length > 0) {
+          select.selectedIndex = sessions.length - 1; // Pick most recent event
+          fetchHistoricalData();
+        }
       } catch (err) {
         console.error("Failed to fetch sessions:", err);
       }
@@ -258,7 +281,7 @@
         raceControlData = (await rcRes.json()) || [];
 
         adjustLayoutForSessionType();
-        populateDriverFilter();
+        populateTeamAndDriverFilters();
         renderKPIs();
         renderFilteredViews();
         renderPenalties();
@@ -289,16 +312,47 @@
       }
     }
 
-    function populateDriverFilter() {
-      const select = document.getElementById('driver-select');
-      select.innerHTML = '';
+    function populateTeamAndDriverFilters() {
+      const teamSelect = document.getElementById('team-filter');
+      const driverSelect = document.getElementById('driver-select');
+      
+      teamSelect.innerHTML = '<option value="ALL">All Teams</option>';
+      driverSelect.innerHTML = '';
+
+      const teams = new Set();
+
       Object.values(driversMap).forEach(d => {
+        if (d.team_name) teams.add(d.team_name);
+
         const opt = document.createElement('option');
         opt.value = String(d.driver_number);
         opt.selected = true;
-        opt.innerText = `#${d.driver_number} - ${d.broadcast_name || d.full_name || d.driver_number}`;
-        select.appendChild(opt);
+        opt.innerText = `#${d.driver_number} - ${d.broadcast_name || d.full_name || d.driver_number} (${d.team_name || 'F1'})`;
+        driverSelect.appendChild(opt);
       });
+
+      teams.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.innerText = t;
+        teamSelect.appendChild(opt);
+      });
+    }
+
+    function applyTeamFilter() {
+      const selectedTeam = document.getElementById('team-filter').value;
+      const driverSelect = document.getElementById('driver-select');
+
+      Array.from(driverSelect.options).forEach(opt => {
+        const driver = driversMap[opt.value];
+        if (selectedTeam === 'ALL' || (driver && driver.team_name === selectedTeam)) {
+          opt.selected = true;
+        } else {
+          opt.selected = false;
+        }
+      });
+
+      renderFilteredViews();
     }
 
     function selectAllDrivers() {
@@ -363,12 +417,14 @@
     }
 
     function renderChart(selectedNums) {
-      const datasets = selectedNums.map(numStr => {
+      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
+
+      const datasets = targets.map(numStr => {
         const num = Number(numStr);
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
-        const driver = driversMap[num] || { broadcast_name: numStr, team_colour: 'FFFFFF' };
+        const driver = driversMap[num] || driversMap[numStr] || { broadcast_name: numStr };
         return {
-          label: driver.broadcast_name || numStr,
+          label: driver.broadcast_name || driver.full_name || numStr,
           data: dLaps.map(l => ({ x: l.lap_number, y: l.lap_duration })),
           borderColor: `#${driver.team_colour || 'ffffff'}`,
           backgroundColor: `#${driver.team_colour || 'ffffff'}`,
@@ -397,14 +453,10 @@
       const tbody = document.getElementById('classification-table');
       tbody.innerHTML = '';
 
-      if (!selectedNums || !selectedNums.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="color:#888;">No drivers selected.</td></tr>';
-        return;
-      }
-
+      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
       const maxLaps = Math.max(...lapsData.map(l => l.lap_number || 0), 1);
 
-      const driverSummary = selectedNums.map(numStr => {
+      const driverSummary = targets.map(numStr => {
         const num = Number(numStr);
         const driver = driversMap[num] || driversMap[numStr];
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr);
@@ -465,7 +517,9 @@
         return;
       }
 
-      const filteredPits = pitData.filter(p => selectedNums.includes(String(p.driver_number)));
+      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
+      const filteredPits = pitData.filter(p => targets.includes(String(p.driver_number)));
+
       if (!filteredPits.length) {
         tbody.innerHTML = '<tr><td colspan="5" style="color: #888;">No pit stops recorded for selected drivers.</td></tr>';
         return;
@@ -493,7 +547,9 @@
       const tbody = document.getElementById('sector-table');
       tbody.innerHTML = '';
 
-      selectedNums.forEach(numStr => {
+      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
+
+      targets.forEach(numStr => {
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_duration);
         if (!dLaps.length) return;
 
@@ -530,7 +586,9 @@
       const tbody = document.getElementById('practice-table');
       tbody.innerHTML = '';
 
-      selectedNums.forEach(numStr => {
+      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
+
+      targets.forEach(numStr => {
         const driver = driversMap[Number(numStr)] || driversMap[numStr];
         const dStints = stintsData.filter(s => String(s.driver_number) === numStr);
 
