@@ -5,25 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>F1 Historical Vault — Scuderia Sanfelice</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
-
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background: #121212; color: #fff; }
     nav { display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
     nav a { color: #888; text-decoration: none; font-weight: bold; font-size: 1.1rem; }
     nav a.active { color: #e10600; border-bottom: 2px solid #e10600; padding-bottom: 8px; }
     h1, h2, h3 { color: #e10600; margin-bottom: 5px; }
-
+    
     .controls { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; background: #1e1e1e; padding: 15px; border-radius: 8px; align-items: center; }
     .control-item { display: flex; flex-direction: column; gap: 4px; }
     .control-item label { font-size: 0.8rem; color: #aaa; text-transform: uppercase; font-weight: bold; }
     select, input, button { padding: 8px 12px; border-radius: 4px; background: #222; color: #fff; border: 1px solid #444; font-size: 0.95rem; }
     button { background: #e10600; border: none; cursor: pointer; font-weight: bold; height: 38px; align-self: flex-end; }
     button:hover { background: #ff1e1e; }
-    button:disabled { background: #555; cursor: not-allowed; opacity: 0.6; }
-
+    
     .btn-action { padding: 6px 12px; border-radius: 4px; border: 1px solid #555; background: #2a2a2a; color: #fff; cursor: pointer; font-size: 0.85rem; font-weight: bold; height: auto; align-self: auto; }
     .btn-action:hover { background: #e10600; border-color: #e10600; }
 
@@ -34,7 +31,7 @@
 
     .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
     .chart-container { position: relative; height: 420px; width: 100%; }
-
+    
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { text-align: left; padding: 10px; border-bottom: 1px solid #333; font-size: 0.95rem; }
     th { color: #888; background: #181818; cursor: pointer; user-select: none; transition: color 0.2s, background 0.2s; }
@@ -47,51 +44,9 @@
     .dnf-tag { background: #d32f2f; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.8rem; font-weight: bold; }
     .penalty-box { background: #2a1a1a; border-left: 3px solid #ff5252; padding: 8px 12px; margin-bottom: 8px; border-radius: 4px; font-size: 0.9rem; }
     .hidden { display: none; }
-
-    /* Loading overlay */
-    #loading-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.7);
-      z-index: 9999;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-    }
-    #loading-overlay.visible { display: flex; }
-    .spinner {
-      width: 48px; height: 48px;
-      border: 4px solid #333;
-      border-top-color: #e10600;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #loading-msg { color: #fff; font-size: 1rem; font-weight: bold; }
-
-    /* Rate-limit warning banner */
-    #rate-banner {
-      display: none;
-      background: #2a1a00;
-      border-left: 4px solid #ff9800;
-      padding: 10px 16px;
-      border-radius: 6px;
-      margin-bottom: 14px;
-      font-size: 0.9rem;
-      color: #ffcc80;
-    }
-    #rate-banner.visible { display: block; }
   </style>
 </head>
 <body>
-
-  <!-- Loading overlay -->
-  <div id="loading-overlay">
-    <div class="spinner"></div>
-    <div id="loading-msg">Fetching session data…</div>
-  </div>
 
   <nav>
     <a href="/">🏠 Home</a>
@@ -100,10 +55,6 @@
   </nav>
 
   <h1>📜 Session Analysis Vault</h1>
-
-  <div id="rate-banner">
-    ⚠️ OpenF1 API rate limit hit — retrying automatically. Please wait a moment.
-  </div>
 
   <div class="controls">
     <div class="control-item">
@@ -122,7 +73,7 @@
 
     <div class="control-item">
       <label for="session-select">Track / Grand Prix</label>
-      <select id="session-select" onchange="debouncedFetch()"></select>
+      <select id="session-select" onchange="fetchHistoricalData()"></select>
     </div>
 
     <div class="control-item">
@@ -139,7 +90,7 @@
       </select>
     </div>
 
-    <button id="load-btn" onclick="fetchHistoricalData()">Load Session Analytics</button>
+    <button onclick="fetchHistoricalData()">Load Session Analytics</button>
   </div>
 
   <div class="kpi-grid">
@@ -165,6 +116,7 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
       <h2 id="session-title" style="margin: 0;">Loading latest event telemetry...</h2>
       <div>
+        <button class="btn-action" onclick="resetZoomChart()">Reset Zoom</button>
         <button class="btn-action" onclick="selectAllDrivers()">Select All Drivers</button>
         <button class="btn-action" onclick="deselectAllDrivers()">Reset Drivers</button>
       </div>
@@ -248,135 +200,37 @@
   </div>
 
   <script>
-    // ─── State ────────────────────────────────────────────────────────────────
     let driversMap = {}, lapsData = [], positionData = [], stintsData = [], pitData = [], raceControlData = [], intervalsData = [], chartInstance = null;
     let selectedDriverFilter = 'ALL';
     const MAX_CLEAN_LAP_TIME = 180.0;
 
-    // ─── Cache: avoids re-fetching the same session key ──────────────────────
-    const sessionCache = {};
-
-    // ─── Debounce: prevents rapid-fire fetches when dropdown changes ─────────
-    let debounceTimer = null;
-    function debouncedFetch() {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => fetchHistoricalData(), 600);
-    }
-
-    // ─── Loading UI helpers ───────────────────────────────────────────────────
-    function showLoading(msg = 'Fetching session data…') {
-      document.getElementById('loading-msg').innerText = msg;
-      document.getElementById('loading-overlay').classList.add('visible');
-      document.getElementById('load-btn').disabled = true;
-    }
-    function hideLoading() {
-      document.getElementById('loading-overlay').classList.remove('visible');
-      document.getElementById('load-btn').disabled = false;
-    }
-    function showRateBanner() { document.getElementById('rate-banner').classList.add('visible'); }
-    function hideRateBanner() { document.getElementById('rate-banner').classList.remove('visible'); }
-
-    // ─── Fetch with retry on 429 ─────────────────────────────────────────────
-    // Retries up to maxRetries times, doubling the wait on each attempt.
-    async function fetchWithRetry(url, maxRetries = 4, baseDelayMs = 1500) {
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-          const res = await fetch(url);
-
-          if (res.status === 429) {
-            showRateBanner();
-            if (attempt < maxRetries) {
-              const wait = baseDelayMs * Math.pow(2, attempt);
-              document.getElementById('loading-msg').innerText = `Rate limit hit — retrying in ${(wait / 1000).toFixed(1)}s…`;
-              await delay(wait);
-              continue;
-            } else {
-              console.warn(`Rate limit persisted after ${maxRetries} retries for: ${url}`);
-              return [];
-            }
-          }
-
-          hideRateBanner();
-          if (!res.ok) {
-            console.warn(`Non-OK response ${res.status} for ${url}`);
-            return [];
-          }
-          return await res.json();
-
-        } catch (err) {
-          if (attempt < maxRetries) {
-            await delay(baseDelayMs * Math.pow(2, attempt));
-          } else {
-            console.error(`Fetch failed after retries: ${url}`, err);
-            return [];
-          }
-        }
-      }
-      return [];
-    }
-
-    function delay(ms) {
-      return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    // ─── Sequential endpoint fetcher ─────────────────────────────────────────
-    // Fetches each endpoint one-at-a-time with a small gap between them.
-    // This is the core fix: OpenF1 blocks simultaneous requests from the same IP.
-    async function fetchSessionEndpoints(sessionKey) {
-      // Return cached data immediately — no API calls needed
-      if (sessionCache[sessionKey]) {
-        return sessionCache[sessionKey];
-      }
-
-      const endpoints = [
-        { name: 'drivers',      url: `https://api.openf1.org/v1/drivers?session_key=${sessionKey}` },
-        { name: 'laps',         url: `https://api.openf1.org/v1/laps?session_key=${sessionKey}` },
-        { name: 'position',     url: `https://api.openf1.org/v1/position?session_key=${sessionKey}` },
-        { name: 'stints',       url: `https://api.openf1.org/v1/stints?session_key=${sessionKey}` },
-        { name: 'pit',          url: `https://api.openf1.org/v1/pit?session_key=${sessionKey}` },
-        { name: 'race_control', url: `https://api.openf1.org/v1/race_control?session_key=${sessionKey}` },
-        { name: 'intervals',    url: `https://api.openf1.org/v1/intervals?session_key=${sessionKey}` },
-      ];
-
-      const results = {};
-      for (let i = 0; i < endpoints.length; i++) {
-        const { name, url } = endpoints[i];
-        document.getElementById('loading-msg').innerText = `Loading ${name} (${i + 1}/${endpoints.length})…`;
-        results[name] = await fetchWithRetry(url);
-        // Small polite gap between requests so we don't saturate the API
-        if (i < endpoints.length - 1) await delay(300);
-      }
-
-      // Store in cache so switching back to this session is instant
-      sessionCache[sessionKey] = results;
-      return results;
-    }
-
-    // ─── Startup ─────────────────────────────────────────────────────────────
     async function autoLoadLatestLandingEvent() {
       const yearSelect = document.getElementById('year-select');
       const currentYear = new Date().getFullYear();
       yearSelect.innerHTML = '';
+
       for (let y = currentYear; y >= 2023; y--) {
         const opt = document.createElement('option');
-        opt.value = y; opt.innerText = y;
+        opt.value = y;
+        opt.innerText = y;
         yearSelect.appendChild(opt);
       }
 
       try {
-        showLoading('Checking latest session…');
-        const latestArr = await fetchWithRetry('https://api.openf1.org/v1/sessions?session_key=latest');
+        const res = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
+        const latestArr = await res.json();
+        
         if (latestArr && latestArr.length > 0) {
           const latest = latestArr[0];
           yearSelect.value = latest.year || currentYear;
           document.getElementById('type-select').value = latest.session_type || 'Race';
+          
           await loadSessions(true, String(latest.session_key));
         } else {
           await loadSessions(true);
         }
       } catch (err) {
-        console.error("Auto load failed, falling back:", err);
-        hideLoading();
+        console.error("Auto load latest session failed, falling back:", err);
         await loadSessions(true);
       }
     }
@@ -384,15 +238,15 @@
     async function loadSessions(shouldAutoFetchData = false, targetSessionKey = null) {
       const year = document.getElementById('year-select').value;
       const sessionType = document.getElementById('type-select').value;
-
+      
       try {
-        const sessions = await fetchWithRetry(`https://api.openf1.org/v1/sessions?year=${year}&session_type=${sessionType}`);
+        const res = await fetch(`https://api.openf1.org/v1/sessions?year=${year}&session_type=${sessionType}`);
+        const sessions = await res.json();
         const select = document.getElementById('session-select');
         select.innerHTML = '';
-
+        
         if (!sessions || !sessions.length) {
           select.innerHTML = '<option value="">No sessions found</option>';
-          hideLoading();
           return;
         }
 
@@ -403,79 +257,92 @@
           select.appendChild(opt);
         });
 
-        if (targetSessionKey) select.value = String(targetSessionKey);
-        if (!select.value && sessions.length > 0) select.selectedIndex = sessions.length - 1;
+        if (targetSessionKey) {
+          select.value = String(targetSessionKey);
+        }
+        
+        if (!select.value && sessions.length > 0) {
+          select.selectedIndex = sessions.length - 1;
+        }
 
         if (shouldAutoFetchData && select.value) {
-          await fetchHistoricalData();
-        } else {
-          hideLoading();
+          fetchHistoricalData();
         }
       } catch (err) {
         console.error("Failed to fetch sessions list:", err);
-        hideLoading();
       }
     }
 
     async function fetchHistoricalData() {
       const selectEl = document.getElementById('session-select');
-      if (!selectEl || !selectEl.value || selectEl.value === '') return;
+      if (!selectEl || !selectEl.value || selectEl.value === '' || selectEl.value === 'No sessions found') return;
 
       const sessionKey = selectEl.value;
-      const sessionTitle = selectEl.selectedOptions[0]?.innerText || 'Latest Event';
+      const sessionTitle = selectEl.selectedOptions[0] ? selectEl.selectedOptions[0].innerText : "Latest Event";
       document.getElementById('session-title').innerText = sessionTitle;
 
-      showLoading('Starting fetch…');
-
       try {
-        const data = await fetchSessionEndpoints(sessionKey);
+        const [dRes, lRes, pRes, sRes, pitRes, rcRes, iRes] = await Promise.all([
+          fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/position?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/stints?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/pit?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/race_control?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/intervals?session_key=${sessionKey}`)
+        ]);
 
         driversMap = {};
-        if (Array.isArray(data.drivers)) {
-          data.drivers.forEach(d => driversMap[d.driver_number] = d);
+        const dData = await dRes.json();
+        if (Array.isArray(dData)) {
+          dData.forEach(d => driversMap[d.driver_number] = d);
         }
-
-        lapsData        = Array.isArray(data.laps)         ? data.laps         : [];
-        positionData    = Array.isArray(data.position)     ? data.position     : [];
-        stintsData      = Array.isArray(data.stints)       ? data.stints       : [];
-        pitData         = Array.isArray(data.pit)          ? data.pit          : [];
-        raceControlData = Array.isArray(data.race_control) ? data.race_control : [];
-        intervalsData   = Array.isArray(data.intervals)    ? data.intervals    : [];
+        
+        lapsData = (await lRes.json()) || [];
+        positionData = (await pRes.json()) || [];
+        stintsData = (await sRes.json()) || [];
+        pitData = (await pitRes.json()) || [];
+        raceControlData = (await rcRes.json()) || [];
+        intervalsData = (await iRes.json()) || [];
 
         adjustLayoutForSessionType();
         populateTeamAndDriverFilters();
         renderKPIs();
         renderFilteredViews();
         renderPenalties();
-
       } catch (err) {
         console.error("Error fetching historical telemetry:", err);
-      } finally {
-        hideLoading();
       }
     }
-
-    // ─── Everything below is unchanged from the original ─────────────────────
 
     function adjustLayoutForSessionType() {
       const sType = document.getElementById('type-select').value;
       const raceClass = document.getElementById('section-race-classification');
-      const racePits  = document.getElementById('section-race-pits');
+      const racePits = document.getElementById('section-race-pits');
       const practiceRuns = document.getElementById('section-practice-runs');
+
       if (sType === 'Race') {
-        raceClass.classList.remove('hidden'); racePits.classList.remove('hidden'); practiceRuns.classList.add('hidden');
+        raceClass.classList.remove('hidden');
+        racePits.classList.remove('hidden');
+        practiceRuns.classList.add('hidden');
       } else if (sType === 'Qualifying') {
-        raceClass.classList.add('hidden'); racePits.classList.add('hidden'); practiceRuns.classList.add('hidden');
+        raceClass.classList.add('hidden');
+        racePits.classList.add('hidden');
+        practiceRuns.classList.add('hidden');
       } else if (sType === 'Practice') {
-        raceClass.classList.add('hidden'); racePits.classList.add('hidden'); practiceRuns.classList.remove('hidden');
+        raceClass.classList.add('hidden');
+        racePits.classList.add('hidden');
+        practiceRuns.classList.remove('hidden');
       }
     }
 
     function populateTeamAndDriverFilters() {
       const teamSelect = document.getElementById('team-filter');
       const driverSelect = document.getElementById('driver-select');
+      
       teamSelect.innerHTML = '<option value="ALL">All Teams</option>';
       driverSelect.innerHTML = '<option value="ALL">All Drivers</option>';
+
       const teams = new Set();
       Object.values(driversMap).forEach(d => {
         if (d.team_name) teams.add(d.team_name);
@@ -484,11 +351,14 @@
         opt.innerText = `#${d.driver_number} - ${d.broadcast_name || d.full_name || d.driver_number}`;
         driverSelect.appendChild(opt);
       });
+
       teams.forEach(t => {
         const opt = document.createElement('option');
-        opt.value = t; opt.innerText = t;
+        opt.value = t;
+        opt.innerText = t;
         teamSelect.appendChild(opt);
       });
+
       selectedDriverFilter = 'ALL';
     }
 
@@ -513,7 +383,9 @@
     function getActiveDriverNumbers() {
       const selectedTeam = document.getElementById('team-filter').value;
       const selectedDriver = document.getElementById('driver-select').value;
+
       if (selectedDriverFilter === 'NONE') return [];
+
       return Object.keys(driversMap).map(String).filter(numStr => {
         const driver = driversMap[Number(numStr)] || driversMap[numStr];
         const matchesTeam = (selectedTeam === 'ALL' || (driver && driver.team_name === selectedTeam));
@@ -525,8 +397,10 @@
     function renderFilteredViews() {
       const activeNums = getActiveDriverNumbers();
       const sType = document.getElementById('type-select').value;
+
       renderChart(activeNums);
       renderSectorTable(activeNums);
+
       if (sType === 'Race') {
         renderClassificationTable(activeNums);
         renderPitTable(activeNums);
@@ -537,9 +411,11 @@
 
     function renderKPIs() {
       const sType = document.getElementById('type-select').value;
+
       if (sType === 'Race') {
         const p1Positions = positionData.filter(p => p.position === 1);
         let winnerName = 'N/A';
+        
         if (p1Positions.length) {
           const winnerNum = p1Positions[p1Positions.length - 1].driver_number;
           winnerName = driversMap[winnerNum] ? (driversMap[winnerNum].broadcast_name || driversMap[winnerNum].full_name) : `#${winnerNum}`;
@@ -548,7 +424,11 @@
           const driverSummary = activeNums.map(numStr => {
             const dLaps = lapsData.filter(l => String(l.driver_number) === numStr);
             const validLaps = dLaps.filter(l => l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
-            return { numStr, lapCount: dLaps.length, totalDuration: validLaps.reduce((a, b) => a + b.lap_duration, 0) };
+            return {
+              numStr,
+              lapCount: dLaps.length,
+              totalDuration: validLaps.reduce((a, b) => a + b.lap_duration, 0)
+            };
           });
           driverSummary.sort((a, b) => b.lapCount - a.lapCount || a.totalDuration - b.totalDuration);
           if (driverSummary.length) {
@@ -556,8 +436,10 @@
             winnerName = topDriver ? (topDriver.broadcast_name || topDriver.full_name) : `#${driverSummary[0].numStr}`;
           }
         }
+        
         document.getElementById('kpi-title-1').innerText = 'Race Winner';
         document.getElementById('kpi-val-1').innerText = winnerName;
+
         const validLaps = lapsData.filter(l => l.lap_duration && l.lap_duration > 50 && l.lap_duration < MAX_CLEAN_LAP_TIME);
         if (validLaps.length) {
           const bestLap = validLaps.reduce((p, c) => p.lap_duration < c.lap_duration ? p : c);
@@ -570,12 +452,15 @@
         if (validLaps.length) {
           const bestLap = validLaps.reduce((p, c) => p.lap_duration < c.lap_duration ? p : c);
           const leaderName = driversMap[bestLap.driver_number] ? (driversMap[bestLap.driver_number].broadcast_name || driversMap[bestLap.driver_number].full_name) : `#${bestLap.driver_number}`;
+          
           document.getElementById('kpi-title-1').innerText = 'P1 Pace Leader';
           document.getElementById('kpi-val-1').innerText = leaderName;
+
           document.getElementById('kpi-title-2').innerText = sType === 'Qualifying' ? 'Pole Position Time' : 'Session Best Lap';
           document.getElementById('kpi-val-2').innerText = `${leaderName} (${bestLap.lap_duration.toFixed(3)}s)`;
         }
       }
+
       let topSpeed = 0, topSpeedDriver = 'N/A';
       lapsData.forEach(l => {
         if (l.st_speed && l.st_speed > topSpeed) {
@@ -585,186 +470,99 @@
       });
       document.getElementById('kpi-title-3').innerText = 'Top Speed Trap';
       document.getElementById('kpi-val-3').innerText = `${topSpeedDriver} (${topSpeed} km/h)`;
+
       document.getElementById('kpi-title-4').innerText = 'Total Laps Logged';
       document.getElementById('kpi-val-4').innerText = lapsData.length;
     }
 
-function renderChart(activeNums) {
-
-    const datasets = activeNums.map(numStr => {
-
+    function renderChart(activeNums) {
+      const datasets = activeNums.map(numStr => {
         const num = Number(numStr);
-
-        const dLaps = lapsData.filter(l =>
-            String(l.driver_number) === numStr &&
-            l.lap_duration &&
-            l.lap_duration < MAX_CLEAN_LAP_TIME
-        );
-
-        const driver =
-            driversMap[num] ||
-            driversMap[numStr] ||
-            { broadcast_name: numStr };
-
+        const dLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
+        const driver = driversMap[num] || driversMap[numStr] || { broadcast_name: numStr };
         return {
-
-            label: driver.broadcast_name || driver.full_name || numStr,
-
-            data: dLaps.map(l => ({
-                x: l.lap_number,
-                y: l.lap_duration
-            })),
-
-            borderColor: `#${driver.team_colour || "ffffff"}`,
-            backgroundColor: `#${driver.team_colour || "ffffff"}`,
-
-            tension: 0.1,
-
-            pointRadius: dLaps.map(l =>
-                l.is_pit_out_lap ? 7 : 2
-            ),
-
-            pointStyle: dLaps.map(l =>
-                l.is_pit_out_lap ? "rectRot" : "circle"
-            )
-
+          label: driver.broadcast_name || driver.full_name || numStr,
+          data: dLaps.map(l => ({ x: l.lap_number, y: l.lap_duration })),
+          borderColor: `#${driver.team_colour || 'ffffff'}`,
+          backgroundColor: `#${driver.team_colour || 'ffffff'}`,
+          tension: 0.1,
+          pointRadius: dLaps.map(l => l.is_pit_out_lap ? 7 : 2),
+          pointStyle: dLaps.map(l => l.is_pit_out_lap ? 'rectRot' : 'circle')
         };
+      });
 
-    });
-
-    if (chartInstance)
-        chartInstance.destroy();
-
-    chartInstance = new Chart(
-        document.getElementById("lapChart").getContext("2d"),
-        {
-
-            type: "line",
-
-            data: {
-                datasets
-            },
-
-            options: {
-
-                responsive: true,
-
-                maintainAspectRatio: false,
-
-                interaction: {
-                    mode: "nearest",
-                    intersect: false
-                },
-
-                scales: {
-
-                    x: {
-                        type: "linear",
-                        title: {
-                            display: true,
-                            text: "Lap Number",
-                            color: "#888"
-                        }
-                    },
-
-                    y: {
-
-                        title: {
-                            display: true,
-                            text: "Lap Time (Seconds)",
-                            color: "#888"
-                        },
-
-                        suggestedMax: 140
-
-                    }
-
-                },
-
-                plugins: {
-
-                    legend: {
-                        position: "top"
-                    },
-
-                    zoom: {
-
-                        pan: {
-
-                            enabled: true,
-
-                            mode: "y"
-
-                        },
-
-                        zoom: {
-
-                            wheel: {
-
-                                enabled: true
-
-                            },
-
-                            drag: {
-
-                                enabled: true
-
-                            },
-
-                            pinch: {
-
-                                enabled: true
-
-                            },
-
-                            mode: "y"
-
-                        }
-
-                    }
-
-                }
-
+      if (chartInstance) chartInstance.destroy();
+      chartInstance = new Chart(document.getElementById('lapChart').getContext('2d'), {
+        type: 'line',
+        data: { datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            annotation: { annotations: getRaceControlAnnotations() },
+            zoom: {
+              pan: { enabled: true, mode: 'xy' },
+              zoom: {
+                wheel: { enabled: true },
+                pinch: { enabled: true },
+                mode: 'xy',
+                drag: { enabled: true, backgroundColor: 'rgba(225,6,0,0.2)' }
+              }
             }
-
+          },
+          scales: {
+            x: { type: 'linear', title: { display: true, text: 'Lap Number', color: '#888' } },
+            y: { title: { display: true, text: 'Lap Time (Seconds)', color: '#888' }, suggestedMax: 140 }
+          }
         }
-    );
+      });
+    }
 
-    document
-        .getElementById("lapChart")
-        .ondblclick = () => chartInstance.resetZoom();
-
-}
+    function resetZoomChart() {
+      if (chartInstance && typeof chartInstance.resetZoom === 'function') {
+        chartInstance.resetZoom();
+      }
+    }
 
     function renderClassificationTable(activeNums) {
       const tbody = document.getElementById('classification-table');
       tbody.innerHTML = '';
+
       if (!activeNums || !activeNums.length) {
         tbody.innerHTML = '<tr><td colspan="7" style="color:#888;">No drivers match the current filter selection.</td></tr>';
         return;
       }
+
       const maxLaps = Math.max(...lapsData.map(l => l.lap_number || 0), 1);
+
       const driverSummary = activeNums.map(numStr => {
         const num = Number(numStr);
         const driver = driversMap[num] || driversMap[numStr];
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr);
         const dPos = positionData.filter(p => String(p.driver_number) === numStr);
+
         let startPos = dPos.length ? dPos[0].position : 'N/A';
         let finalPos = dPos.length ? dPos[dPos.length - 1].position : 99;
+
         const validLaps = dLaps.filter(l => l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
         const totalDuration = validLaps.reduce((a, b) => a + b.lap_duration, 0);
         const avgPace = validLaps.length ? (totalDuration / validLaps.length).toFixed(2) : 'N/A';
         const maxSpeed = dLaps.length ? Math.max(...dLaps.map(l => l.st_speed || 0)) : 0;
+
         const dStints = stintsData.filter(s => String(s.driver_number) === numStr);
         const stintStr = dStints.map(s => `${s.compound || 'UNK'} (${(s.lap_end - s.lap_start + 1) || '?'}L)`).join(' ➔ ') || 'N/A';
+
         const isDNF = dLaps.length < maxLaps - 5;
+
         return { numStr, driver, startPos, finalPos, lapCount: dLaps.length, totalDuration, avgPace, maxSpeed, stintStr, isDNF };
       });
+
       driverSummary.sort((a, b) => {
         if (a.finalPos !== 99 && b.finalPos !== 99) return a.finalPos - b.finalPos;
         if (b.lapCount !== a.lapCount) return b.lapCount - a.lapCount;
         return a.totalDuration - b.totalDuration;
       });
+
       driverSummary.forEach((d, idx) => {
         let posDeltaStr = 'N/A';
         const calcFinal = d.finalPos !== 99 ? d.finalPos : idx + 1;
@@ -774,6 +572,7 @@ function renderChart(activeNums) {
           else if (delta < 0) posDeltaStr = `<span class="pos-lost">▼ ${delta} (P${d.startPos} ➔ P${calcFinal})</span>`;
           else posDeltaStr = `━ 0 (P${d.startPos})`;
         }
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td><strong>P${idx + 1}</strong></td>
@@ -791,20 +590,25 @@ function renderChart(activeNums) {
     function renderPitTable(activeNums) {
       const tbody = document.getElementById('pit-table');
       tbody.innerHTML = '';
+
       if (!pitData || !pitData.length) {
         tbody.innerHTML = '<tr><td colspan="5" style="color: #888;">No pit stop timing logs recorded for this session.</td></tr>';
         return;
       }
+
       const filteredPits = pitData.filter(p => activeNums.includes(String(p.driver_number)));
+
       if (!filteredPits.length) {
         tbody.innerHTML = '<tr><td colspan="5" style="color: #888;">No pit stops recorded for active drivers.</td></tr>';
         return;
       }
+
       let stopCounts = {};
       filteredPits.forEach(p => {
         const numStr = String(p.driver_number);
         stopCounts[numStr] = (stopCounts[numStr] || 0) + 1;
         const driver = driversMap[p.driver_number] || driversMap[numStr];
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td><strong>${driver ? (driver.broadcast_name || driver.full_name) : `#${numStr}`}</strong></td>
@@ -820,18 +624,26 @@ function renderChart(activeNums) {
     function renderSectorTable(activeNums) {
       const tbody = document.getElementById('sector-table');
       tbody.innerHTML = '';
+
       activeNums.forEach(numStr => {
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_duration);
         if (!dLaps.length) return;
+
         const driver = driversMap[Number(numStr)] || driversMap[numStr];
         const s1s = dLaps.map(l => l.duration_sector_1).filter(s => s > 0);
         const s2s = dLaps.map(l => l.duration_sector_2).filter(s => s > 0);
         const s3s = dLaps.map(l => l.duration_sector_3).filter(s => s > 0);
+
         if (!s1s.length || !s2s.length || !s3s.length) return;
-        const bestS1 = Math.min(...s1s), bestS2 = Math.min(...s2s), bestS3 = Math.min(...s3s);
+
+        const bestS1 = Math.min(...s1s);
+        const bestS2 = Math.min(...s2s);
+        const bestS3 = Math.min(...s3s);
         const theoreticalBest = bestS1 + bestS2 + bestS3;
+
         const actualBestLap = Math.min(...dLaps.map(l => l.lap_duration));
         const delta = actualBestLap - theoreticalBest;
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td><strong>${driver ? (driver.broadcast_name || driver.full_name) : `#${numStr}`}</strong></td>
@@ -849,15 +661,19 @@ function renderChart(activeNums) {
     function renderPracticeTable(activeNums) {
       const tbody = document.getElementById('practice-table');
       tbody.innerHTML = '';
+
       activeNums.forEach(numStr => {
         const driver = driversMap[Number(numStr)] || driversMap[numStr];
         const dStints = stintsData.filter(s => String(s.driver_number) === numStr);
+
         dStints.forEach(s => {
           const stintLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_number >= s.lap_start && l.lap_number <= s.lap_end && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
+          
           if (stintLaps.length >= 5) {
             const avgPace = (stintLaps.reduce((a, b) => a + b.lap_duration, 0) / stintLaps.length).toFixed(2);
             const degDelta = (stintLaps[stintLaps.length - 1].lap_duration - stintLaps[0].lap_duration).toFixed(2);
             const degText = degDelta > 0 ? `+${degDelta}s / stint` : `${degDelta}s / stint`;
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
               <td><strong>${driver ? (driver.broadcast_name || driver.full_name) : `#${numStr}`}</strong></td>
@@ -875,39 +691,51 @@ function renderChart(activeNums) {
     function renderPenalties() {
       const container = document.getElementById('penalties-container');
       container.innerHTML = '';
-      const penalties = raceControlData.filter(rc =>
-        rc.category === 'Penalty' ||
-        rc.message?.includes('PENALTY') ||
-        rc.message?.includes('INVESTIGATION') ||
+
+      const penalties = raceControlData.filter(rc => 
+        rc.category === 'Penalty' || 
+        rc.message?.includes('PENALTY') || 
+        rc.message?.includes('INVESTIGATION') || 
         rc.message?.includes('CAR') ||
         rc.flag === 'BLACK AND WHITE' ||
         rc.flag === 'YELLOW' ||
         rc.flag === 'RED'
       );
+
       if (!penalties.length) {
         container.innerHTML = '<p style="color: #888;">No steward notifications recorded for this session.</p>';
         return;
       }
+
       penalties.forEach(p => {
         let resolvedDriver = null;
+
         if (p.driver_number && driversMap[p.driver_number]) {
           resolvedDriver = driversMap[p.driver_number].broadcast_name || driversMap[p.driver_number].full_name;
         }
+
         if (!resolvedDriver && p.message) {
           const carMatch = p.message.match(/CAR\s+(\d+)/i);
           if (carMatch) {
             const carNum = Number(carMatch[1]);
-            resolvedDriver = driversMap[carNum] ? (driversMap[carNum].broadcast_name || driversMap[carNum].full_name) : `CAR #${carNum}`;
+            if (driversMap[carNum]) {
+              resolvedDriver = driversMap[carNum].broadcast_name || driversMap[carNum].full_name;
+            } else {
+              resolvedDriver = `CAR #${carNum}`;
+            }
           } else {
             const codeMatch = p.message.match(/\(([A-Z]{3})\)/);
             if (codeMatch) {
-              const found = Object.values(driversMap).find(d => d.name_acronym === codeMatch[1] || d.broadcast_name?.includes(codeMatch[1]));
+              const code = codeMatch[1];
+              const found = Object.values(driversMap).find(d => d.name_acronym === code || d.broadcast_name?.includes(code));
               if (found) resolvedDriver = found.broadcast_name || found.full_name;
             }
           }
         }
+
         const isTrackWideFlag = p.flag === 'YELLOW' || p.flag === 'RED' || p.flag === 'SAFETY CAR' || p.message?.includes('SAFETY CAR') || p.message?.includes('VSC');
-        const labelName = resolvedDriver || (isTrackWideFlag ? 'ALL' : 'ALL DRIVERS');
+        const labelName = resolvedDriver ? resolvedDriver : (isTrackWideFlag ? 'ALL' : 'ALL DRIVERS');
+
         const box = document.createElement('div');
         box.className = 'penalty-box';
         box.innerHTML = `<strong>${labelName}</strong> (Lap ${p.lap_number || 'N/A'}): ${p.message}`;
@@ -916,27 +744,48 @@ function renderChart(activeNums) {
     }
 
     const tableSortStates = {};
+
     function sortTable(tableId, colIndex) {
       const table = document.getElementById(tableId);
       const tbody = table.querySelector('tbody');
       const rows = Array.from(tbody.querySelectorAll('tr'));
+      
       if (!rows.length || rows[0].cells.length <= colIndex) return;
-      if (!tableSortStates[tableId]) tableSortStates[tableId] = { col: null, asc: true };
+
+      if (!tableSortStates[tableId]) {
+        tableSortStates[tableId] = { col: null, asc: true };
+      }
+
       const state = tableSortStates[tableId];
-      if (state.col === colIndex) state.asc = !state.asc;
-      else { state.col = colIndex; state.asc = true; }
+      if (state.col === colIndex) {
+        state.asc = !state.asc;
+      } else {
+        state.col = colIndex;
+        state.asc = true;
+      }
+
       const headers = table.querySelectorAll('th');
       headers.forEach((th, idx) => {
         th.classList.remove('sort-asc', 'sort-desc');
-        if (idx === colIndex) th.classList.add(state.asc ? 'sort-asc' : 'sort-desc');
+        if (idx === colIndex) {
+          th.classList.add(state.asc ? 'sort-asc' : 'sort-desc');
+        }
       });
+
       rows.sort((a, b) => {
         let cellA = a.cells[colIndex] ? a.cells[colIndex].innerText.trim() : '';
         let cellB = b.cells[colIndex] ? b.cells[colIndex].innerText.trim() : '';
-        const valA = parseSortValue(cellA), valB = parseSortValue(cellB);
-        if (typeof valA === 'number' && typeof valB === 'number') return state.asc ? valA - valB : valB - valA;
-        return state.asc ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+
+        const valA = parseSortValue(cellA);
+        const valB = parseSortValue(cellB);
+
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          return state.asc ? valA - valB : valB - valA;
+        } else {
+          return state.asc ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+        }
       });
+
       rows.forEach(row => tbody.appendChild(row));
     }
 
@@ -944,8 +793,13 @@ function renderChart(activeNums) {
       if (!text) return '';
       const pMatch = text.match(/^P(\d+)/i);
       if (pMatch) return Number(pMatch[1]);
-      const numMatch = text.match(/^([+-]?\d+\.?\d*)/);
-      if (numMatch) { const num = parseFloat(numMatch[1]); if (!isNaN(num)) return num; }
+
+      const numMatch = text.match(/^([+-]?1?\d+\.?\d*)/);
+      if (numMatch) {
+        const num = parseFloat(numMatch[1]);
+        if (!isNaN(num)) return num;
+      }
+
       return text.toLowerCase();
     }
 
