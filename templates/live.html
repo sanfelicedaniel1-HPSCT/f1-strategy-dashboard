@@ -17,7 +17,7 @@
     #countdown-box { font-size: 2.5rem; font-weight: bold; margin: 20px 0; color: #00e676; letter-spacing: 2px; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: left; }
     th, td { padding: 8px; border-bottom: 1px solid #333; font-size: 0.95rem; }
-    th { color: #888; }
+    th { color: #888; background: #181818; }
     .badge { background: #e10600; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
     .hidden { display: none; }
   </style>
@@ -36,10 +36,10 @@
     <div id="countdown-box">00d 00h 00m 00s</div>
   </div>
 
-  <!-- LIVE DASHBOARD CARD (Shown when FP1/2/3, Quali, or Race is live) -->
+  <!-- LIVE DASHBOARD CARD (Shown when FP1/2/3, Quali, Sprint, or Race is active) -->
   <div id="live-dashboard" class="hidden">
     <div class="card" style="text-align: left;">
-      <h2><span class="badge">LIVE</span> <span id="session-info">Connecting to telemetry...</span></h2>
+      <h2><span class="badge">LIVE</span> <span id="session-info">Connecting to pit wall telemetry...</span></h2>
       <p id="session-type-sub" style="color: #888; margin-top: 5px;"></p>
     </div>
 
@@ -49,12 +49,17 @@
     </div>
 
     <div class="card" style="text-align: left;">
-      <h2>Live Standings & Intervals</h2>
+      <h2>Live Standings, Intervals & Speed Traps</h2>
       <table>
         <thead>
           <tr>
-            <th>Driver</th><th>Best / Avg Pace</th><th>Tire (Age)</th><th>Gap to Lead</th>
-            <th>Interval</th><th>Est Pit Exit Delta</th><th>Max Speed</th>
+            <th>Driver</th>
+            <th>Best / Avg Pace</th>
+            <th>Tire (Age)</th>
+            <th>Gap to Lead</th>
+            <th>Interval</th>
+            <th>Est Pit Exit Delta</th>
+            <th>Max Speed</th>
           </tr>
         </thead>
         <tbody id="strategy-table"></tbody>
@@ -65,16 +70,15 @@
   <script>
     let sessionKey = null, driversMap = {}, lapsData = [], intervalsData = [], raceControlData = [], chartInstance = null;
     const PIT_LOSS_SECONDS = 22.0;
+    const MAX_CLEAN_LAP_TIME = 180.0; // Filter out red flags & slow out-laps > 3 minutes
 
     async function checkNextOrActiveSession() {
       try {
         const currentYear = new Date().getFullYear();
-        // Fetch all sessions for the current year sorted chronologically
         const res = await fetch(`https://api.openf1.org/v1/sessions?year=${currentYear}`);
         const sessions = await res.json();
         
         if (!sessions.length) {
-          // Fallback if current year is empty
           const fallbackRes = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
           const fallbackSessions = await fallbackRes.json();
           showCountdown(fallbackSessions[0] || null);
@@ -89,13 +93,11 @@
           const start = new Date(s.date_start);
           const end = new Date(s.date_end);
 
-          // Active session check: currently running (or ended < 30 mins ago)
           if (now >= start && now <= new Date(end.getTime() + 30 * 60000)) {
             activeSession = s;
             break;
           }
           
-          // Next upcoming session
           if (start > now) {
             upcomingSession = s;
             break;
@@ -108,12 +110,11 @@
           sessionKey = activeSession.session_key;
           
           document.getElementById('session-info').innerText = `${activeSession.location} GP — ${activeSession.session_name}`;
-          document.getElementById('session-type-sub').innerText = `Session: ${activeSession.session_name} (${activeSession.year})`;
+          document.getElementById('session-type-sub').innerText = `Session Type: ${activeSession.session_name} (${activeSession.year})`;
           initLiveDashboard();
         } else if (upcomingSession) {
           showCountdown(upcomingSession);
         } else {
-          // End of season scenario
           showCountdown(sessions[sessions.length - 1]);
         }
       } catch (err) {
@@ -153,7 +154,7 @@
 
     async function initLiveDashboard() {
       await loadLiveData();
-      setInterval(loadLiveData, 15000);
+      setInterval(loadLiveData, 15000); // Auto-poll telemetry every 15 seconds
     }
 
     async function loadLiveData() {
@@ -175,8 +176,10 @@
 
     function renderLiveChart() {
       const driverNums = Object.keys(driversMap);
+      
+      // Filter out outlier laps (> 180s) so red flags or long pit stops don't flatten the graph
       const datasets = driverNums.map(num => {
-        const dLaps = lapsData.filter(l => l.driver_number == num && l.lap_duration);
+        const dLaps = lapsData.filter(l => l.driver_number == num && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
         const driver = driversMap[num] || { broadcast_name: num, team_colour: 'FFFFFF' };
         return {
           label: driver.broadcast_name,
@@ -198,7 +201,7 @@
           maintainAspectRatio: false,
           scales: {
             x: { type: 'linear', title: { display: true, text: 'Lap Number', color: '#888' } },
-            y: { title: { display: true, text: 'Lap Time (s)', color: '#888' } }
+            y: { title: { display: true, text: 'Lap Time (s)', color: '#888' }, suggestedMax: 140 }
           }
         }
       });
@@ -207,13 +210,16 @@
     function renderLiveTable() {
       const tbody = document.getElementById('strategy-table');
       tbody.innerHTML = '';
+
       Object.keys(driversMap).forEach(num => {
         const dLaps = lapsData.filter(l => l.driver_number == num);
         if (!dLaps.length) return;
+
         const driver = driversMap[num];
-        const validLaps = dLaps.filter(l => l.lap_duration);
-        const avgLap = (validLaps.reduce((acc, l) => acc + l.lap_duration, 0) / validLaps.length).toFixed(2);
+        const validLaps = dLaps.filter(l => l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
+        const avgLap = validLaps.length ? (validLaps.reduce((acc, l) => acc + l.lap_duration, 0) / validLaps.length).toFixed(2) : 'N/A';
         const latestLap = dLaps[dLaps.length - 1];
+        
         const dIntervals = intervalsData.filter(i => i.driver_number == num);
         const latestInterval = dIntervals.length ? dIntervals[dIntervals.length - 1] : null;
 
@@ -225,7 +231,7 @@
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td><strong>${driver ? driver.broadcast_name : num}</strong></td>
-          <td>${isNaN(avgLap) ? 'N/A' : avgLap + 's'}</td>
+          <td>${avgLap !== 'N/A' ? avgLap + 's' : 'N/A'}</td>
           <td>${latestLap?.compound || 'Unk'} (${latestLap?.tyre_age_at_start || 0} L)</td>
           <td>${gapToLeader}</td>
           <td>${intervalAhead}</td>
