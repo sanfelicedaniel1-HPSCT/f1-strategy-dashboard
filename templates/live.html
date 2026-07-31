@@ -309,7 +309,7 @@
       select.innerHTML = '';
       Object.values(driversMap).forEach(d => {
         const opt = document.createElement('option');
-        opt.value = d.driver_number;
+        opt.value = String(d.driver_number);
         opt.selected = true;
         opt.innerText = `#${d.driver_number} - ${d.broadcast_name}`;
         select.appendChild(opt);
@@ -330,7 +330,7 @@
 
     function getSelectedDriverNumbers() {
       const select = document.getElementById('driver-select');
-      return Array.from(select.selectedOptions).map(o => o.value);
+      return Array.from(select.selectedOptions).map(o => String(o.value));
     }
 
     function renderKPIs() {
@@ -421,9 +421,10 @@
     }
 
     function renderLiveChart(selectedNums) {
-      const datasets = selectedNums.map(num => {
-        const dLaps = lapsData.filter(l => l.driver_number == num && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
-        const driver = driversMap[num] || { broadcast_name: num, team_colour: 'FFFFFF' };
+      const datasets = selectedNums.map(numStr => {
+        const num = Number(numStr);
+        const dLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
+        const driver = driversMap[num] || { broadcast_name: numStr, team_colour: 'FFFFFF' };
         return {
           label: driver.broadcast_name,
           data: dLaps.map(l => ({ x: l.lap_number, y: l.lap_duration })),
@@ -455,16 +456,16 @@
       const tbody = document.getElementById('strategy-table');
       tbody.innerHTML = '';
 
-      selectedNums.forEach(num => {
-        const dLaps = lapsData.filter(l => l.driver_number == num);
+      selectedNums.forEach(numStr => {
+        const dLaps = lapsData.filter(l => String(l.driver_number) === numStr);
         if (!dLaps.length) return;
 
-        const driver = driversMap[num];
+        const driver = driversMap[Number(numStr)];
         const validLaps = dLaps.filter(l => l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
         const avgLap = validLaps.length ? (validLaps.reduce((acc, l) => acc + l.lap_duration, 0) / validLaps.length).toFixed(2) : 'N/A';
         const latestLap = dLaps[dLaps.length - 1];
         
-        const dIntervals = intervalsData.filter(i => i.driver_number == num);
+        const dIntervals = intervalsData.filter(i => String(i.driver_number) === numStr);
         const latestInterval = dIntervals.length ? dIntervals[dIntervals.length - 1] : null;
 
         const gapToLeader = latestInterval?.gap_to_leader !== undefined ? (latestInterval.gap_to_leader === 0 ? 'LEADER' : `+${latestInterval.gap_to_leader}s`) : 'N/A';
@@ -474,7 +475,7 @@
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><strong>${driver ? driver.broadcast_name : num}</strong></td>
+          <td><strong>${driver ? driver.broadcast_name : numStr}</strong></td>
           <td>${avgLap !== 'N/A' ? avgLap + 's' : 'N/A'}</td>
           <td>${latestLap?.compound || 'Unk'} (${latestLap?.tyre_age_at_start || 0} L)</td>
           <td>${gapToLeader}</td>
@@ -498,14 +499,14 @@
       const filteredPits = pitData.filter(p => selectedNums.includes(String(p.driver_number)));
       let stopCounts = {};
       filteredPits.forEach(p => {
-        const num = p.driver_number;
-        stopCounts[num] = (stopCounts[num] || 0) + 1;
-        const driver = driversMap[num];
+        const numStr = String(p.driver_number);
+        stopCounts[numStr] = (stopCounts[numStr] || 0) + 1;
+        const driver = driversMap[p.driver_number];
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><strong>${driver ? driver.broadcast_name : num}</strong></td>
-          <td>Stop ${stopCounts[num]}</td>
+          <td><strong>${driver ? driver.broadcast_name : numStr}</strong></td>
+          <td>Stop ${stopCounts[numStr]}</td>
           <td>Lap ${p.lap_number || 'N/A'}</td>
           <td>${p.pit_duration ? p.pit_duration.toFixed(2) + 's' : 'N/A'}</td>
           <td style="color: #00e676; font-weight: bold;">${p.stop_duration ? p.stop_duration.toFixed(2) + 's' : 'N/A'}</td>
@@ -518,17 +519,16 @@
       const tbody = document.getElementById('sector-table');
       tbody.innerHTML = '';
 
-      // Find overall best sectors across all valid laps for Pole reference
       const allValidLaps = lapsData.filter(l => l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
-      const poleS1 = Math.min(...allValidLaps.map(l => l.duration_sector_1).filter(s => s > 0));
-      const poleS2 = Math.min(...allValidLaps.map(l => l.duration_sector_2).filter(s => s > 0));
-      const poleS3 = Math.min(...allValidLaps.map(l => l.duration_sector_3).filter(s => s > 0));
+      const poleS1 = allValidLaps.length ? Math.min(...allValidLaps.map(l => l.duration_sector_1).filter(s => s > 0)) : 0;
+      const poleS2 = allValidLaps.length ? Math.min(...allValidLaps.map(l => l.duration_sector_2).filter(s => s > 0)) : 0;
+      const poleS3 = allValidLaps.length ? Math.min(...allValidLaps.map(l => l.duration_sector_3).filter(s => s > 0)) : 0;
 
-      selectedNums.forEach(num => {
-        const dLaps = lapsData.filter(l => l.driver_number == num && l.lap_duration);
+      selectedNums.forEach(numStr => {
+        const dLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_duration);
         if (!dLaps.length) return;
 
-        const driver = driversMap[num];
+        const driver = driversMap[Number(numStr)];
         const s1s = dLaps.map(l => l.duration_sector_1).filter(s => s > 0);
         const s2s = dLaps.map(l => l.duration_sector_2).filter(s => s > 0);
         const s3s = dLaps.map(l => l.duration_sector_3).filter(s => s > 0);
@@ -549,7 +549,7 @@
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><strong>${driver ? driver.broadcast_name : num}</strong></td>
+          <td><strong>${driver ? driver.broadcast_name : numStr}</strong></td>
           <td>${bestS1.toFixed(3)}s <span style="font-size:0.8rem; color:#888;">(${dS1})</span></td>
           <td>${bestS2.toFixed(3)}s <span style="font-size:0.8rem; color:#888;">(${dS2})</span></td>
           <td>${bestS3.toFixed(3)}s <span style="font-size:0.8rem; color:#888;">(${dS3})</span></td>
@@ -565,12 +565,12 @@
       const tbody = document.getElementById('practice-table');
       tbody.innerHTML = '';
 
-      selectedNums.forEach(num => {
-        const driver = driversMap[num];
-        const dStints = stintsData.filter(s => s.driver_number == num);
+      selectedNums.forEach(numStr => {
+        const driver = driversMap[Number(numStr)];
+        const dStints = stintsData.filter(s => String(s.driver_number) === numStr);
 
         dStints.forEach(s => {
-          const stintLaps = lapsData.filter(l => l.driver_number == num && l.lap_number >= s.lap_start && l.lap_number <= s.lap_end && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
+          const stintLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_number >= s.lap_start && l.lap_number <= s.lap_end && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
           
           if (stintLaps.length >= 5) {
             const avgPace = (stintLaps.reduce((a, b) => a + b.lap_duration, 0) / stintLaps.length).toFixed(2);
@@ -579,7 +579,7 @@
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-              <td><strong>${driver ? driver.broadcast_name : num}</strong></td>
+              <td><strong>${driver ? driver.broadcast_name : numStr}</strong></td>
               <td>${s.compound || 'UNK'}</td>
               <td>${stintLaps.length} Laps (L${s.lap_start}-L${s.lap_end})</td>
               <td>${avgPace}s</td>
