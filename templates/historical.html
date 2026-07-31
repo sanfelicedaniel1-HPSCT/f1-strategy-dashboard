@@ -203,24 +203,28 @@
       const year = document.getElementById('year-select').value;
       const sessionType = document.getElementById('type-select').value;
       
-      const res = await fetch(`https://api.openf1.org/v1/sessions?year=${year}&session_type=${sessionType}`);
-      const sessions = await res.json();
-      const select = document.getElementById('session-select');
-      select.innerHTML = '';
-      
-      if (!sessions.length) {
-        const opt = document.createElement('option');
-        opt.innerText = 'No sessions found';
-        select.appendChild(opt);
-        return;
-      }
+      try {
+        const res = await fetch(`https://api.openf1.org/v1/sessions?year=${year}&session_type=${sessionType}`);
+        const sessions = await res.json();
+        const select = document.getElementById('session-select');
+        select.innerHTML = '';
+        
+        if (!sessions || !sessions.length) {
+          const opt = document.createElement('option');
+          opt.innerText = 'No sessions found';
+          select.appendChild(opt);
+          return;
+        }
 
-      sessions.forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s.session_key;
-        opt.innerText = `${s.location} GP — ${s.session_name}`;
-        select.appendChild(opt);
-      });
+        sessions.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.session_key;
+          opt.innerText = `${s.location} GP — ${s.session_name}`;
+          select.appendChild(opt);
+        });
+      } catch (err) {
+        console.error("Failed to load sessions:", err);
+      }
     }
 
     async function fetchHistoricalData() {
@@ -231,28 +235,36 @@
       const sessionTitle = selectEl.selectedOptions[0].innerText;
       document.getElementById('session-title').innerText = sessionTitle;
 
-      const [dRes, lRes, pRes, sRes, pitRes, rcRes] = await Promise.all([
-        fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`),
-        fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`),
-        fetch(`https://api.openf1.org/v1/position?session_key=${sessionKey}`),
-        fetch(`https://api.openf1.org/v1/stints?session_key=${sessionKey}`),
-        fetch(`https://api.openf1.org/v1/pit?session_key=${sessionKey}`),
-        fetch(`https://api.openf1.org/v1/race_control?session_key=${sessionKey}`)
-      ]);
+      try {
+        const [dRes, lRes, pRes, sRes, pitRes, rcRes] = await Promise.all([
+          fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/position?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/stints?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/pit?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/race_control?session_key=${sessionKey}`)
+        ]);
 
-      driversMap = {};
-      (await dRes.json()).forEach(d => driversMap[d.driver_number] = d);
-      lapsData = await lRes.json();
-      positionData = await pRes.json();
-      stintsData = await sRes.json();
-      pitData = await pitRes.json();
-      raceControlData = await rcRes.json();
+        driversMap = {};
+        const dData = await dRes.json();
+        if (Array.isArray(dData)) {
+          dData.forEach(d => driversMap[d.driver_number] = d);
+        }
+        
+        lapsData = (await lRes.json()) || [];
+        positionData = (await pRes.json()) || [];
+        stintsData = (await sRes.json()) || [];
+        pitData = (await pitRes.json()) || [];
+        raceControlData = (await rcRes.json()) || [];
 
-      adjustLayoutForSessionType();
-      populateDriverFilter();
-      renderKPIs();
-      renderFilteredViews();
-      renderPenalties();
+        adjustLayoutForSessionType();
+        populateDriverFilter();
+        renderKPIs();
+        renderFilteredViews();
+        renderPenalties();
+      } catch (err) {
+        console.error("Error fetching historical data:", err);
+      }
     }
 
     function adjustLayoutForSessionType() {
@@ -284,7 +296,7 @@
         const opt = document.createElement('option');
         opt.value = String(d.driver_number);
         opt.selected = true;
-        opt.innerText = `#${d.driver_number} - ${d.broadcast_name}`;
+        opt.innerText = `#${d.driver_number} - ${d.broadcast_name || d.full_name || d.driver_number}`;
         select.appendChild(opt);
       });
     }
@@ -356,7 +368,7 @@
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
         const driver = driversMap[num] || { broadcast_name: numStr, team_colour: 'FFFFFF' };
         return {
-          label: driver.broadcast_name,
+          label: driver.broadcast_name || numStr,
           data: dLaps.map(l => ({ x: l.lap_number, y: l.lap_duration })),
           borderColor: `#${driver.team_colour || 'ffffff'}`,
           backgroundColor: `#${driver.team_colour || 'ffffff'}`,
@@ -394,15 +406,16 @@
 
       const driverSummary = selectedNums.map(numStr => {
         const num = Number(numStr);
-        const driver = driversMap[num];
+        const driver = driversMap[num] || driversMap[numStr];
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr);
         const dPos = positionData.filter(p => String(p.driver_number) === numStr);
 
-        const startPos = dPos.length ? dPos[0].position : 'N/A';
-        const finalPos = dPos.length ? dPos[dPos.length - 1].position : (dLaps.length ? 100 - dLaps.length : 99);
+        let startPos = dPos.length ? dPos[0].position : 'N/A';
+        let finalPos = dPos.length ? dPos[dPos.length - 1].position : 99;
 
         const validLaps = dLaps.filter(l => l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
-        const avgPace = validLaps.length ? (validLaps.reduce((a, b) => a + b.lap_duration, 0) / validLaps.length).toFixed(2) : 'N/A';
+        const totalDuration = validLaps.reduce((a, b) => a + b.lap_duration, 0);
+        const avgPace = validLaps.length ? (totalDuration / validLaps.length).toFixed(2) : 'N/A';
         const maxSpeed = dLaps.length ? Math.max(...dLaps.map(l => l.st_speed || 0)) : 0;
 
         const dStints = stintsData.filter(s => String(s.driver_number) === numStr);
@@ -410,24 +423,30 @@
 
         const isDNF = dLaps.length < maxLaps - 5;
 
-        return { numStr, driver, startPos, finalPos, avgPace, maxSpeed, stintStr, isDNF };
+        return { numStr, driver, startPos, finalPos, lapCount: dLaps.length, totalDuration, avgPace, maxSpeed, stintStr, isDNF };
       });
 
-      driverSummary.sort((a, b) => (a.finalPos || 99) - (b.finalPos || 99));
+      // Primary sort by final position; Secondary sort fallback by laps completed and total duration
+      driverSummary.sort((a, b) => {
+        if (a.finalPos !== 99 && b.finalPos !== 99) return a.finalPos - b.finalPos;
+        if (b.lapCount !== a.lapCount) return b.lapCount - a.lapCount;
+        return a.totalDuration - b.totalDuration;
+      });
 
       driverSummary.forEach((d, idx) => {
         let posDeltaStr = 'N/A';
-        if (d.startPos !== 'N/A' && d.finalPos < 90) {
-          const delta = d.startPos - d.finalPos;
-          if (delta > 0) posDeltaStr = `<span class="pos-gained">▲ +${delta} (P${d.startPos} ➔ P${d.finalPos})</span>`;
-          else if (delta < 0) posDeltaStr = `<span class="pos-lost">▼ ${delta} (P${d.startPos} ➔ P${d.finalPos})</span>`;
+        const calcFinal = d.finalPos !== 99 ? d.finalPos : idx + 1;
+        if (d.startPos !== 'N/A') {
+          const delta = d.startPos - calcFinal;
+          if (delta > 0) posDeltaStr = `<span class="pos-gained">▲ +${delta} (P${d.startPos} ➔ P${calcFinal})</span>`;
+          else if (delta < 0) posDeltaStr = `<span class="pos-lost">▼ ${delta} (P${d.startPos} ➔ P${calcFinal})</span>`;
           else posDeltaStr = `━ 0 (P${d.startPos})`;
         }
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td><strong>P${idx + 1}</strong></td>
-          <td><strong>${d.driver ? d.driver.broadcast_name : d.numStr}</strong></td>
+          <td><strong>${d.driver ? (d.driver.broadcast_name || d.driver.full_name) : `#${d.numStr}`}</strong></td>
           <td>${posDeltaStr}</td>
           <td style="font-size: 0.85rem; color: #aaa;">${d.stintStr}</td>
           <td>${d.avgPace !== 'N/A' ? d.avgPace + 's' : 'N/A'}</td>
@@ -443,7 +462,7 @@
       tbody.innerHTML = '';
 
       if (!pitData || !pitData.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="color: #888;">No pit stop timing logs found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="color: #888;">No pit stop timing logs recorded for this session.</td></tr>';
         return;
       }
 
@@ -457,11 +476,11 @@
       filteredPits.forEach(p => {
         const numStr = String(p.driver_number);
         stopCounts[numStr] = (stopCounts[numStr] || 0) + 1;
-        const driver = driversMap[p.driver_number];
+        const driver = driversMap[p.driver_number] || driversMap[numStr];
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><strong>${driver ? driver.broadcast_name : numStr}</strong></td>
+          <td><strong>${driver ? (driver.broadcast_name || driver.full_name) : `#${numStr}`}</strong></td>
           <td>Stop ${stopCounts[numStr]}</td>
           <td>Lap ${p.lap_number || 'N/A'}</td>
           <td>${p.pit_duration ? p.pit_duration.toFixed(2) + 's' : 'N/A'}</td>
@@ -479,7 +498,7 @@
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_duration);
         if (!dLaps.length) return;
 
-        const driver = driversMap[Number(numStr)];
+        const driver = driversMap[Number(numStr)] || driversMap[numStr];
         const s1s = dLaps.map(l => l.duration_sector_1).filter(s => s > 0);
         const s2s = dLaps.map(l => l.duration_sector_2).filter(s => s > 0);
         const s3s = dLaps.map(l => l.duration_sector_3).filter(s => s > 0);
@@ -496,7 +515,7 @@
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><strong>${driver ? driver.broadcast_name : numStr}</strong></td>
+          <td><strong>${driver ? (driver.broadcast_name || driver.full_name) : `#${numStr}`}</strong></td>
           <td>${bestS1.toFixed(3)}s</td>
           <td>${bestS2.toFixed(3)}s</td>
           <td>${bestS3.toFixed(3)}s</td>
@@ -513,7 +532,7 @@
       tbody.innerHTML = '';
 
       selectedNums.forEach(numStr => {
-        const driver = driversMap[Number(numStr)];
+        const driver = driversMap[Number(numStr)] || driversMap[numStr];
         const dStints = stintsData.filter(s => String(s.driver_number) === numStr);
 
         dStints.forEach(s => {
@@ -526,7 +545,7 @@
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-              <td><strong>${driver ? driver.broadcast_name : numStr}</strong></td>
+              <td><strong>${driver ? (driver.broadcast_name || driver.full_name) : `#${numStr}`}</strong></td>
               <td>${s.compound || 'UNK'}</td>
               <td>${stintLaps.length} Laps (L${s.lap_start}-L${s.lap_end})</td>
               <td>${avgPace}s</td>
@@ -552,7 +571,7 @@
       }
 
       penalties.forEach(p => {
-        const driverName = p.driver_number && driversMap[p.driver_number] ? driversMap[p.driver_number].broadcast_name : (p.driver_number ? `#${p.driver_number}` : 'ALL');
+        const driverName = p.driver_number && driversMap[p.driver_number] ? (driversMap[p.driver_number].broadcast_name || driversMap[p.driver_number].full_name) : (p.driver_number ? `#${p.driver_number}` : 'ALL');
         const box = document.createElement('div');
         box.className = 'penalty-box';
         box.innerHTML = `<strong>${driverName}</strong> (Lap ${p.lap_number || 'N/A'}): ${p.message}`;
