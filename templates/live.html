@@ -32,11 +32,11 @@
   <!-- COUNTDOWN CARD (Shown when offline) -->
   <div id="countdown-card" class="card hidden">
     <h2>⏳ Next F1 Session Countdown</h2>
-    <p id="next-session-title">Checking F1 Schedule...</p>
+    <p id="next-session-title" style="font-size: 1.2rem; margin-top: 8px; color: #ccc;">Checking F1 Schedule...</p>
     <div id="countdown-box">00d 00h 00m 00s</div>
   </div>
 
-  <!-- LIVE DASHBOARD CARD (Shown when practice, quali, or race is active) -->
+  <!-- LIVE DASHBOARD CARD (Shown when FP1/2/3, Quali, or Race is live) -->
   <div id="live-dashboard" class="hidden">
     <div class="card" style="text-align: left;">
       <h2><span class="badge">LIVE</span> <span id="session-info">Connecting to telemetry...</span></h2>
@@ -49,7 +49,7 @@
     </div>
 
     <div class="card" style="text-align: left;">
-      <h2>Live Standings & Sector/Interval Data</h2>
+      <h2>Live Standings & Intervals</h2>
       <table>
         <thead>
           <tr>
@@ -66,48 +66,71 @@
     let sessionKey = null, driversMap = {}, lapsData = [], intervalsData = [], raceControlData = [], chartInstance = null;
     const PIT_LOSS_SECONDS = 22.0;
 
-    async function checkLiveStatus() {
+    async function checkNextOrActiveSession() {
       try {
-        const res = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
+        const currentYear = new Date().getFullYear();
+        // Fetch all sessions for the current year sorted chronologically
+        const res = await fetch(`https://api.openf1.org/v1/sessions?year=${currentYear}`);
         const sessions = await res.json();
         
         if (!sessions.length) {
-          showCountdown(null);
+          // Fallback if current year is empty
+          const fallbackRes = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
+          const fallbackSessions = await fallbackRes.json();
+          showCountdown(fallbackSessions[0] || null);
           return;
         }
 
-        const latestSession = sessions[0];
-        const sessionEnd = new Date(latestSession.date_end);
-        const sessionStart = new Date(latestSession.date_start);
         const now = new Date();
+        let activeSession = null;
+        let upcomingSession = null;
 
-        // Check if session is active right now (or ended in the last 45 minutes)
-        if (now >= sessionStart && now <= new Date(sessionEnd.getTime() + 45 * 60000)) {
+        for (let s of sessions) {
+          const start = new Date(s.date_start);
+          const end = new Date(s.date_end);
+
+          // Active session check: currently running (or ended < 30 mins ago)
+          if (now >= start && now <= new Date(end.getTime() + 30 * 60000)) {
+            activeSession = s;
+            break;
+          }
+          
+          // Next upcoming session
+          if (start > now) {
+            upcomingSession = s;
+            break;
+          }
+        }
+
+        if (activeSession) {
           document.getElementById('live-dashboard').classList.remove('hidden');
           document.getElementById('countdown-card').classList.add('hidden');
-          sessionKey = latestSession.session_key;
+          sessionKey = activeSession.session_key;
           
-          document.getElementById('session-info').innerText = `${latestSession.location} GP — ${latestSession.session_name}`;
-          document.getElementById('session-type-sub').innerText = `Session Type: ${latestSession.session_type} (${latestSession.year})`;
+          document.getElementById('session-info').innerText = `${activeSession.location} GP — ${activeSession.session_name}`;
+          document.getElementById('session-type-sub').innerText = `Session: ${activeSession.session_name} (${activeSession.year})`;
           initLiveDashboard();
+        } else if (upcomingSession) {
+          showCountdown(upcomingSession);
         } else {
-          showCountdown(latestSession);
+          // End of season scenario
+          showCountdown(sessions[sessions.length - 1]);
         }
       } catch (err) {
         console.error("Schedule check failed:", err);
       }
     }
 
-    function showCountdown(nextSession) {
+    function showCountdown(session) {
       document.getElementById('countdown-card').classList.remove('hidden');
       document.getElementById('live-dashboard').classList.add('hidden');
 
-      let targetDate = nextSession ? new Date(nextSession.date_start) : new Date(Date.now() + 86400000 * 3);
-      if (targetDate <= new Date()) targetDate = new Date(Date.now() + 86400000 * 3);
+      if (!session) return;
 
-      if (nextSession) {
-        document.getElementById('next-session-title').innerText = `${nextSession.location} GP — ${nextSession.session_name}`;
-      }
+      document.getElementById('next-session-title').innerText = 
+        `${session.location} GP — ${session.session_name}`;
+
+      const targetDate = new Date(session.date_start);
 
       function updateTimer() {
         const diff = targetDate - new Date();
@@ -119,6 +142,7 @@
         const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
         const m = Math.floor((diff / 1000 / 60) % 60);
         const s = Math.floor((diff / 1000) % 60);
+
         document.getElementById('countdown-box').innerText = 
           `${String(d).padStart(2,'0')}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
       }
@@ -129,7 +153,7 @@
 
     async function initLiveDashboard() {
       await loadLiveData();
-      setInterval(loadLiveData, 15000); // Poll every 15s
+      setInterval(loadLiveData, 15000);
     }
 
     async function loadLiveData() {
@@ -212,7 +236,7 @@
       });
     }
 
-    checkLiveStatus();
+    checkNextOrActiveSession();
   </script>
 </body>
 </html>
