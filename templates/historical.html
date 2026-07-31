@@ -12,7 +12,7 @@
     nav a { color: #888; text-decoration: none; font-weight: bold; font-size: 1.1rem; }
     nav a.active { color: #e10600; border-bottom: 2px solid #e10600; padding-bottom: 8px; }
     h1, h2 { color: #e10600; margin-bottom: 5px; }
-    .controls { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; background: #1e1e1e; padding: 15px; border-radius: 8px; }
+    .controls { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; background: #1e1e1e; padding: 15px; border-radius: 8px; align-items: center; }
     select, button { padding: 10px; border-radius: 4px; background: #222; color: #fff; border: 1px solid #444; font-size: 1rem; }
     button { background: #e10600; border: none; cursor: pointer; font-weight: bold; }
     button:hover { background: #ff1e1e; }
@@ -30,30 +30,35 @@
     <a href="/historical" class="active">📜 Historical Vault</a>
   </nav>
 
-  <h1>📜 Historical Session Search</h1>
+  <h1>📜 Historical Session Vault</h1>
 
   <div class="controls">
     <label>Year:
-      <select id="year-select" onchange="loadSessions()">
-        <option value="2024" selected>2024</option>
-        <option value="2023">2023</option>
+      <select id="year-select" onchange="loadSessions()"></select>
+    </label>
+
+    <label>Session Type:
+      <select id="type-select" onchange="loadSessions()">
+        <option value="Race" selected>Race</option>
+        <option value="Qualifying">Qualifying</option>
+        <option value="Practice">Practice</option>
       </select>
     </label>
 
-    <label>Session:
+    <label>Grand Prix Event:
       <select id="session-select"></select>
     </label>
 
-    <button onclick="fetchHistoricalData()">Load Race Telemetry</button>
+    <button onclick="fetchHistoricalData()">Load Telemetry</button>
   </div>
 
   <div class="card">
-    <h2 id="session-title">Select a Session Above</h2>
+    <h2 id="session-title">Select an Event Above</h2>
     <div class="chart-container"><canvas id="lapChart"></canvas></div>
   </div>
 
   <div class="card">
-    <h2>Historical Race Strategy Summary</h2>
+    <h2>Historical Session Summary</h2>
     <table>
       <thead>
         <tr>
@@ -67,24 +72,51 @@
   <script>
     let driversMap = {}, lapsData = [], chartInstance = null;
 
+    function initYears() {
+      const yearSelect = document.getElementById('year-select');
+      const currentYear = new Date().getFullYear();
+      yearSelect.innerHTML = '';
+
+      // Populate dynamically from current year (2026) down to 2023
+      for (let y = currentYear; y >= 2023; y--) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.innerText = y;
+        yearSelect.appendChild(opt);
+      }
+      loadSessions();
+    }
+
     async function loadSessions() {
       const year = document.getElementById('year-select').value;
-      const res = await fetch(`https://api.openf1.org/v1/sessions?year=${year}&session_type=Race`);
+      const sessionType = document.getElementById('type-select').value;
+      
+      const res = await fetch(`https://api.openf1.org/v1/sessions?year=${year}&session_type=${sessionType}`);
       const sessions = await res.json();
       const select = document.getElementById('session-select');
       select.innerHTML = '';
       
+      if (!sessions.length) {
+        const opt = document.createElement('option');
+        opt.innerText = 'No sessions found';
+        select.appendChild(opt);
+        return;
+      }
+
       sessions.forEach(s => {
         const opt = document.createElement('option');
         opt.value = s.session_key;
-        opt.innerText = `${s.location} GP (${s.session_name})`;
+        opt.innerText = `${s.location} GP — ${s.session_name}`;
         select.appendChild(opt);
       });
     }
 
     async function fetchHistoricalData() {
-      const sessionKey = document.getElementById('session-select').value;
-      const sessionTitle = document.getElementById('session-select').selectedOptions[0].innerText;
+      const selectEl = document.getElementById('session-select');
+      if (!selectEl.value || selectEl.value === 'No sessions found') return;
+
+      const sessionKey = selectEl.value;
+      const sessionTitle = selectEl.selectedOptions[0].innerText;
       document.getElementById('session-title').innerText = sessionTitle;
 
       const [dRes, lRes] = await Promise.all([
@@ -154,7 +186,7 @@
       });
     }
 
-    loadSessions();
+    initYears();
   </script>
 </body>
 </html>

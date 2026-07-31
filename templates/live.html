@@ -18,6 +18,7 @@
     table { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: left; }
     th, td { padding: 8px; border-bottom: 1px solid #333; font-size: 0.95rem; }
     th { color: #888; }
+    .badge { background: #e10600; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
     .hidden { display: none; }
   </style>
 </head>
@@ -35,25 +36,25 @@
     <div id="countdown-box">00d 00h 00m 00s</div>
   </div>
 
-  <!-- LIVE DASHBOARD CARD (Shown when race is active) -->
+  <!-- LIVE DASHBOARD CARD (Shown when practice, quali, or race is active) -->
   <div id="live-dashboard" class="hidden">
     <div class="card" style="text-align: left;">
-      <h2>🔴 LIVE TELEMETRY STREAM</h2>
-      <p id="session-info">Connecting to pit wall telemetry...</p>
+      <h2><span class="badge">LIVE</span> <span id="session-info">Connecting to telemetry...</span></h2>
+      <p id="session-type-sub" style="color: #888; margin-top: 5px;"></p>
     </div>
 
     <div class="card" style="text-align: left;">
-      <h2>Live Lap Pace & Track Status</h2>
+      <h2>Live Pace & Track Events</h2>
       <div class="chart-container"><canvas id="lapChart"></canvas></div>
     </div>
 
     <div class="card" style="text-align: left;">
-      <h2>Live Standings & Intervals</h2>
+      <h2>Live Standings & Sector/Interval Data</h2>
       <table>
         <thead>
           <tr>
-            <th>Driver</th><th>Avg Pace</th><th>Tire (Age)</th><th>Gap to Lead</th>
-            <th>Interval</th><th>Pit Exit Delta</th><th>Max Speed</th>
+            <th>Driver</th><th>Best / Avg Pace</th><th>Tire (Age)</th><th>Gap to Lead</th>
+            <th>Interval</th><th>Est Pit Exit Delta</th><th>Max Speed</th>
           </tr>
         </thead>
         <tbody id="strategy-table"></tbody>
@@ -67,8 +68,6 @@
 
     async function checkLiveStatus() {
       try {
-        const now = new Date().toISOString();
-        // Query OpenF1 for current active sessions
         const res = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
         const sessions = await res.json();
         
@@ -80,13 +79,16 @@
         const latestSession = sessions[0];
         const sessionEnd = new Date(latestSession.date_end);
         const sessionStart = new Date(latestSession.date_start);
+        const now = new Date();
 
-        // Check if session is happening right now (or ended within last 30 mins)
-        if (new Date() >= sessionStart && new Date() <= new Date(sessionEnd.getTime() + 30 * 60000)) {
+        // Check if session is active right now (or ended in the last 45 minutes)
+        if (now >= sessionStart && now <= new Date(sessionEnd.getTime() + 45 * 60000)) {
           document.getElementById('live-dashboard').classList.remove('hidden');
           document.getElementById('countdown-card').classList.add('hidden');
           sessionKey = latestSession.session_key;
-          document.getElementById('session-info').innerText = `${latestSession.location} GP - ${latestSession.session_name} (${latestSession.year})`;
+          
+          document.getElementById('session-info').innerText = `${latestSession.location} GP — ${latestSession.session_name}`;
+          document.getElementById('session-type-sub').innerText = `Session Type: ${latestSession.session_type} (${latestSession.year})`;
           initLiveDashboard();
         } else {
           showCountdown(latestSession);
@@ -100,7 +102,6 @@
       document.getElementById('countdown-card').classList.remove('hidden');
       document.getElementById('live-dashboard').classList.add('hidden');
 
-      // Target future date (default mock offset if API date passed)
       let targetDate = nextSession ? new Date(nextSession.date_start) : new Date(Date.now() + 86400000 * 3);
       if (targetDate <= new Date()) targetDate = new Date(Date.now() + 86400000 * 3);
 
@@ -128,8 +129,7 @@
 
     async function initLiveDashboard() {
       await loadLiveData();
-      // Auto-poll live data every 15 seconds during active sessions
-      setInterval(loadLiveData, 15000);
+      setInterval(loadLiveData, 15000); // Poll every 15s
     }
 
     async function loadLiveData() {
