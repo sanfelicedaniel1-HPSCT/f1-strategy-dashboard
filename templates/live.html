@@ -19,7 +19,10 @@
     
     table { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: left; }
     th, td { padding: 8px; border-bottom: 1px solid #333; font-size: 0.95rem; }
-    th { color: #888; background: #181818; }
+    th { color: #888; background: #181818; cursor: pointer; user-select: none; transition: color 0.2s, background 0.2s; }
+    th:hover { color: #e10600; background: #222; }
+    th.sort-asc::after { content: " ▲"; color: #e10600; font-size: 0.8rem; }
+    th.sort-desc::after { content: " ▼"; color: #e10600; font-size: 0.8rem; }
     
     .badge { background: #e10600; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
     .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 15px; }
@@ -96,16 +99,16 @@
     <!-- LIVE STANDINGS TABLE (RACE SPECIFIC) -->
     <div id="section-race-standings" class="card" style="text-align: left;">
       <h2>Live Standings & Strategy Deltas</h2>
-      <table>
+      <table id="tbl-live-standings">
         <thead>
           <tr>
-            <th>Driver</th>
-            <th>Best / Avg Pace</th>
-            <th>Tire (Age)</th>
-            <th>Gap to Lead</th>
-            <th>Interval</th>
-            <th>Est Pit Exit Delta</th>
-            <th>Max Speed</th>
+            <th onclick="sortTable('tbl-live-standings', 0)">Driver</th>
+            <th onclick="sortTable('tbl-live-standings', 1)">Best / Avg Pace</th>
+            <th onclick="sortTable('tbl-live-standings', 2)">Tire (Age)</th>
+            <th onclick="sortTable('tbl-live-standings', 3)">Gap to Lead</th>
+            <th onclick="sortTable('tbl-live-standings', 4)">Interval</th>
+            <th onclick="sortTable('tbl-live-standings', 5)">Est Pit Exit Delta</th>
+            <th onclick="sortTable('tbl-live-standings', 6)">Max Speed</th>
           </tr>
         </thead>
         <tbody id="strategy-table"></tbody>
@@ -115,16 +118,16 @@
     <!-- SECTOR PACE & THEORETICAL IDEAL LAPS (QUALIFYING & PRACTICE SPECIFIC) -->
     <div id="section-sectors" class="card" style="text-align: left;">
       <h2>⏱️ Sector Delta to Pole & Theoretical Ideal Laps</h2>
-      <table>
+      <table id="tbl-live-sectors">
         <thead>
           <tr>
-            <th>Driver</th>
-            <th>Best Sector 1 (Δ P1)</th>
-            <th>Best Sector 2 (Δ P1)</th>
-            <th>Best Sector 3 (Δ P1)</th>
-            <th>Theoretical Ideal Lap</th>
-            <th>Actual Best Lap</th>
-            <th>Delta to Ideal</th>
+            <th onclick="sortTable('tbl-live-sectors', 0)">Driver</th>
+            <th onclick="sortTable('tbl-live-sectors', 1)">Best Sector 1 (Δ P1)</th>
+            <th onclick="sortTable('tbl-live-sectors', 2)">Best Sector 2 (Δ P1)</th>
+            <th onclick="sortTable('tbl-live-sectors', 3)">Best Sector 3 (Δ P1)</th>
+            <th onclick="sortTable('tbl-live-sectors', 4)">Theoretical Ideal Lap</th>
+            <th onclick="sortTable('tbl-live-sectors', 5)">Actual Best Lap</th>
+            <th onclick="sortTable('tbl-live-sectors', 6)">Delta to Ideal</th>
           </tr>
         </thead>
         <tbody id="sector-table"></tbody>
@@ -134,14 +137,14 @@
     <!-- PRACTICE SPECIFIC CARD: LONG RUN PACE & DEG SLOPE -->
     <div id="section-practice-runs" class="card hidden" style="text-align: left;">
       <h2>🧪 Long Run Stint Simulations & Tire Degradation (5+ Laps)</h2>
-      <table>
+      <table id="tbl-live-practice">
         <thead>
           <tr>
-            <th>Driver</th>
-            <th>Compound</th>
-            <th>Stint Laps</th>
-            <th>Avg Long Run Pace</th>
-            <th>Pace Degradation Slope (Δt / Lap)</th>
+            <th onclick="sortTable('tbl-live-practice', 0)">Driver</th>
+            <th onclick="sortTable('tbl-live-practice', 1)">Compound</th>
+            <th onclick="sortTable('tbl-live-practice', 2)">Stint Laps</th>
+            <th onclick="sortTable('tbl-live-practice', 3)">Avg Long Run Pace</th>
+            <th onclick="sortTable('tbl-live-practice', 4)">Pace Degradation Slope (Δt / Lap)</th>
           </tr>
         </thead>
         <tbody id="practice-table"></tbody>
@@ -151,14 +154,14 @@
     <!-- PIT STOP TIMING TABLE (RACE SPECIFIC) -->
     <div id="section-race-pits" class="card" style="text-align: left;">
       <h2>🔧 Live Pit Stop Times & Lane Duration</h2>
-      <table>
+      <table id="tbl-live-pits">
         <thead>
           <tr>
-            <th>Driver</th>
-            <th>Stop #</th>
-            <th>Lap #</th>
-            <th>Pit Lane Duration</th>
-            <th>Stationary Stop Time</th>
+            <th onclick="sortTable('tbl-live-pits', 0)">Driver</th>
+            <th onclick="sortTable('tbl-live-pits', 1)">Stop #</th>
+            <th onclick="sortTable('tbl-live-pits', 2)">Lap #</th>
+            <th onclick="sortTable('tbl-live-pits', 3)">Pit Lane Duration</th>
+            <th onclick="sortTable('tbl-live-pits', 4)">Stationary Stop Time</th>
           </tr>
         </thead>
         <tbody id="pit-table"></tbody>
@@ -277,7 +280,7 @@
     async function initLiveDashboard() {
       await loadLiveData();
       populateDriverSelect();
-      setInterval(loadLiveData, 15000); // Poll every 15s
+      setInterval(loadLiveData, 15000);
     }
 
     async function loadLiveData() {
@@ -620,7 +623,13 @@
       container.innerHTML = '';
 
       const penalties = raceControlData.filter(rc => 
-        rc.category === 'Penalty' || rc.message?.includes('PENALTY') || rc.message?.includes('INVESTIGATION') || rc.flag === 'BLACK AND WHITE'
+        rc.category === 'Penalty' || 
+        rc.message?.includes('PENALTY') || 
+        rc.message?.includes('INVESTIGATION') || 
+        rc.message?.includes('CAR') ||
+        rc.flag === 'BLACK AND WHITE' ||
+        rc.flag === 'YELLOW' ||
+        rc.flag === 'RED'
       );
 
       if (!penalties.length) {
@@ -629,12 +638,101 @@
       }
 
       penalties.forEach(p => {
-        const driverName = p.driver_number && driversMap[p.driver_number] ? (driversMap[p.driver_number].broadcast_name || driversMap[p.driver_number].full_name) : (p.driver_number ? `#${p.driver_number}` : 'ALL');
+        let resolvedDriver = null;
+
+        if (p.driver_number && driversMap[p.driver_number]) {
+          resolvedDriver = driversMap[p.driver_number].broadcast_name || driversMap[p.driver_number].full_name;
+        }
+
+        if (!resolvedDriver && p.message) {
+          const carMatch = p.message.match(/CAR\s+(\d+)/i);
+          if (carMatch) {
+            const carNum = Number(carMatch[1]);
+            if (driversMap[carNum]) {
+              resolvedDriver = driversMap[carNum].broadcast_name || driversMap[carNum].full_name;
+            } else {
+              resolvedDriver = `CAR #${carNum}`;
+            }
+          } else {
+            const codeMatch = p.message.match(/\(([A-Z]{3})\)/);
+            if (codeMatch) {
+              const code = codeMatch[1];
+              const found = Object.values(driversMap).find(d => d.name_acronym === code || d.broadcast_name?.includes(code));
+              if (found) resolvedDriver = found.broadcast_name || found.full_name;
+            }
+          }
+        }
+
+        const isTrackWideFlag = p.flag === 'YELLOW' || p.flag === 'RED' || p.flag === 'SAFETY CAR' || p.message?.includes('SAFETY CAR') || p.message?.includes('VSC');
+        const labelName = resolvedDriver ? resolvedDriver : (isTrackWideFlag ? 'ALL' : 'ALL DRIVERS');
+
         const box = document.createElement('div');
         box.className = 'penalty-box';
-        box.innerHTML = `<strong>${driverName}</strong> (Lap ${p.lap_number || 'N/A'}): ${p.message}`;
+        box.innerHTML = `<strong>${labelName}</strong> (Lap ${p.lap_number || 'N/A'}): ${p.message}`;
         container.appendChild(box);
       });
+    }
+
+    // GENERAL TABLE SORTING ENGINE
+    const tableSortStates = {};
+
+    function sortTable(tableId, colIndex) {
+      const table = document.getElementById(tableId);
+      const tbody = table.querySelector('tbody');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      
+      if (!rows.length || rows[0].cells.length <= colIndex) return;
+
+      if (!tableSortStates[tableId]) {
+        tableSortStates[tableId] = { col: null, asc: true };
+      }
+
+      const state = tableSortStates[tableId];
+      if (state.col === colIndex) {
+        state.asc = !state.asc;
+      } else {
+        state.col = colIndex;
+        state.asc = true;
+      }
+
+      const headers = table.querySelectorAll('th');
+      headers.forEach((th, idx) => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (idx === colIndex) {
+          th.classList.add(state.asc ? 'sort-asc' : 'sort-desc');
+        }
+      });
+
+      rows.sort((a, b) => {
+        let cellA = a.cells[colIndex] ? a.cells[colIndex].innerText.trim() : '';
+        let cellB = b.cells[colIndex] ? b.cells[colIndex].innerText.trim() : '';
+
+        const valA = parseSortValue(cellA);
+        const valB = parseSortValue(cellB);
+
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          return state.asc ? valA - valB : valB - valA;
+        } else {
+          return state.asc ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+        }
+      });
+
+      rows.forEach(row => tbody.appendChild(row));
+    }
+
+    function parseSortValue(text) {
+      if (!text) return '';
+      
+      const pMatch = text.match(/^P(\d+)/i);
+      if (pMatch) return Number(pMatch[1]);
+
+      const numMatch = text.match(/^([+-]?\d+\.?\d*)/);
+      if (numMatch) {
+        const num = parseFloat(numMatch[1]);
+        if (!isNaN(num)) return num;
+      }
+
+      return text.toLowerCase();
     }
 
     checkNextOrActiveSession();
