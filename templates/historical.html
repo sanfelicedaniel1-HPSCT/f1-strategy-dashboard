@@ -13,12 +13,14 @@
     nav a.active { color: #e10600; border-bottom: 2px solid #e10600; padding-bottom: 8px; }
     h1, h2, h3 { color: #e10600; margin-bottom: 5px; }
     
-    .controls { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; background: #1e1e1e; padding: 15px; border-radius: 8px; align-items: center; }
-    select, input, button { padding: 10px; border-radius: 4px; background: #222; color: #fff; border: 1px solid #444; font-size: 1rem; }
-    button { background: #e10600; border: none; cursor: pointer; font-weight: bold; }
+    .controls { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; background: #1e1e1e; padding: 15px; border-radius: 8px; align-items: center; }
+    .control-item { display: flex; flex-direction: column; gap: 4px; }
+    .control-item label { font-size: 0.8rem; color: #aaa; text-transform: uppercase; font-weight: bold; }
+    select, input, button { padding: 8px 12px; border-radius: 4px; background: #222; color: #fff; border: 1px solid #444; font-size: 0.95rem; }
+    button { background: #e10600; border: none; cursor: pointer; font-weight: bold; height: 38px; align-self: flex-end; }
     button:hover { background: #ff1e1e; }
     
-    .btn-action { padding: 6px 12px; border-radius: 4px; border: 1px solid #555; background: #2a2a2a; color: #fff; cursor: pointer; font-size: 0.85rem; font-weight: bold; }
+    .btn-action { padding: 6px 12px; border-radius: 4px; border: 1px solid #555; background: #2a2a2a; color: #fff; cursor: pointer; font-size: 0.85rem; font-weight: bold; height: auto; align-self: auto; }
     .btn-action:hover { background: #e10600; border-color: #e10600; }
 
     .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
@@ -37,7 +39,6 @@
     .pos-lost { color: #ff5252; font-weight: bold; }
     .dnf-tag { background: #d32f2f; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.8rem; font-weight: bold; }
     .penalty-box { background: #2a1a1a; border-left: 3px solid #ff5252; padding: 8px 12px; margin-bottom: 8px; border-radius: 4px; font-size: 0.9rem; }
-    .filter-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 15px; background: #252525; padding: 10px; border-radius: 6px; }
     .hidden { display: none; }
   </style>
 </head>
@@ -50,23 +51,40 @@
 
   <h1>📜 Session Analysis Vault</h1>
 
-  <!-- EVENT SELECTOR CONTROLS -->
+  <!-- UNIFIED TOP CONTROL BAR WITH ALL FILTERS -->
   <div class="controls">
-    <label>Year:
+    <div class="control-item">
+      <label for="year-select">Year</label>
       <select id="year-select" onchange="loadSessions()"></select>
-    </label>
+    </div>
 
-    <label>Session Type:
+    <div class="control-item">
+      <label for="type-select">Session Type</label>
       <select id="type-select" onchange="loadSessions()">
         <option value="Race" selected>Race</option>
         <option value="Qualifying">Qualifying</option>
         <option value="Practice">Practice</option>
       </select>
-    </label>
+    </div>
 
-    <label>Track / Grand Prix:
-      <select id="session-select"></select>
-    </label>
+    <div class="control-item">
+      <label for="session-select">Track / Grand Prix</label>
+      <select id="session-select" onchange="fetchHistoricalData()"></select>
+    </div>
+
+    <div class="control-item">
+      <label for="team-filter">Team</label>
+      <select id="team-filter" onchange="applyTeamFilter()">
+        <option value="ALL">All Teams</option>
+      </select>
+    </div>
+
+    <div class="control-item">
+      <label for="driver-select">Filter Driver</label>
+      <select id="driver-select" onchange="renderFilteredViews()">
+        <option value="ALL">All Drivers</option>
+      </select>
+    </div>
 
     <button onclick="fetchHistoricalData()">Load Session Analytics</button>
   </div>
@@ -91,28 +109,15 @@
     </div>
   </div>
 
-  <!-- MAIN PACE CHART & FILTERS -->
+  <!-- PACE GRAPH -->
   <div class="card">
-    <h2 id="session-title">Loading Latest Event...</h2>
-    
-    <!-- DRIVER & TEAM FILTERS -->
-    <div class="filter-group">
-      <label>Filter Team:
-        <select id="team-filter" onchange="applyTeamFilter()">
-          <option value="ALL">All Teams</option>
-        </select>
-      </label>
-
-      <label>Filter Drivers:
-        <select id="driver-select" multiple size="4" onchange="renderFilteredViews()"></select>
-      </label>
-      
-      <div style="display: flex; flex-direction: column; gap: 5px;">
-        <button class="btn-action" onclick="selectAllDrivers()">Select All</button>
-        <button class="btn-action" onclick="deselectAllDrivers()">Deselect All</button>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+      <h2 id="session-title" style="margin: 0;">Auto-loading latest Grand Prix...</h2>
+      <div>
+        <button class="btn-action" onclick="selectAllDrivers()">Select All Drivers</button>
+        <button class="btn-action" onclick="deselectAllDrivers()">Reset Drivers</button>
       </div>
     </div>
-
     <div class="chart-container"><canvas id="lapChart"></canvas></div>
   </div>
 
@@ -198,9 +203,10 @@
 
   <script>
     let driversMap = {}, lapsData = [], positionData = [], stintsData = [], pitData = [], raceControlData = [], chartInstance = null;
+    let selectedDriverFilter = 'ALL';
     const MAX_CLEAN_LAP_TIME = 180.0;
 
-    async function initYears() {
+    async function autoLoadLatestLandingEvent() {
       const yearSelect = document.getElementById('year-select');
       const currentYear = new Date().getFullYear();
       yearSelect.innerHTML = '';
@@ -211,12 +217,28 @@
         opt.innerText = y;
         yearSelect.appendChild(opt);
       }
-      
-      // Auto-load sessions for current year and trigger initial analysis for most recent session
-      await loadSessions(true);
+
+      // Fetch latest session directly from OpenF1
+      try {
+        const res = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
+        const latestArr = await res.json();
+        
+        if (latestArr && latestArr.length) {
+          const latest = latestArr[0];
+          yearSelect.value = latest.year || currentYear;
+          document.getElementById('type-select').value = latest.session_type || 'Race';
+          
+          await loadSessions(latest.session_key);
+        } else {
+          await loadSessions();
+        }
+      } catch (err) {
+        console.error("Auto load latest session failed, falling back to manual load:", err);
+        await loadSessions();
+      }
     }
 
-    async function loadSessions(isInitialAutoLoad = false) {
+    async function loadSessions(targetSessionKey = null) {
       const year = document.getElementById('year-select').value;
       const sessionType = document.getElementById('type-select').value;
       
@@ -240,11 +262,13 @@
           select.appendChild(opt);
         });
 
-        // Automatically select and load the most recent session on initial landing
-        if (isInitialAutoLoad && sessions.length > 0) {
+        if (targetSessionKey) {
+          select.value = targetSessionKey;
+        } else if (sessions.length > 0) {
           select.selectedIndex = sessions.length - 1; // Pick most recent event
-          fetchHistoricalData();
         }
+
+        fetchHistoricalData();
       } catch (err) {
         console.error("Failed to fetch sessions:", err);
       }
@@ -317,7 +341,7 @@
       const driverSelect = document.getElementById('driver-select');
       
       teamSelect.innerHTML = '<option value="ALL">All Teams</option>';
-      driverSelect.innerHTML = '';
+      driverSelect.innerHTML = '<option value="ALL">All Drivers</option>';
 
       const teams = new Set();
 
@@ -326,8 +350,7 @@
 
         const opt = document.createElement('option');
         opt.value = String(d.driver_number);
-        opt.selected = true;
-        opt.innerText = `#${d.driver_number} - ${d.broadcast_name || d.full_name || d.driver_number} (${d.team_name || 'F1'})`;
+        opt.innerText = `#${d.driver_number} - ${d.broadcast_name || d.full_name || d.driver_number}`;
         driverSelect.appendChild(opt);
       });
 
@@ -337,53 +360,58 @@
         opt.innerText = t;
         teamSelect.appendChild(opt);
       });
+
+      selectedDriverFilter = 'ALL';
     }
 
     function applyTeamFilter() {
       const selectedTeam = document.getElementById('team-filter').value;
       const driverSelect = document.getElementById('driver-select');
-
-      Array.from(driverSelect.options).forEach(opt => {
-        const driver = driversMap[opt.value];
-        if (selectedTeam === 'ALL' || (driver && driver.team_name === selectedTeam)) {
-          opt.selected = true;
-        } else {
-          opt.selected = false;
-        }
-      });
+      
+      driverSelect.value = 'ALL';
+      selectedDriverFilter = 'ALL';
 
       renderFilteredViews();
     }
 
     function selectAllDrivers() {
-      const select = document.getElementById('driver-select');
-      Array.from(select.options).forEach(opt => opt.selected = true);
+      document.getElementById('team-filter').value = 'ALL';
+      document.getElementById('driver-select').value = 'ALL';
+      selectedDriverFilter = 'ALL';
       renderFilteredViews();
     }
 
     function deselectAllDrivers() {
-      const select = document.getElementById('driver-select');
-      Array.from(select.options).forEach(opt => opt.selected = false);
+      selectedDriverFilter = 'NONE';
       renderFilteredViews();
     }
 
-    function getSelectedDriverNumbers() {
-      const select = document.getElementById('driver-select');
-      return Array.from(select.selectedOptions).map(o => String(o.value));
+    function getActiveDriverNumbers() {
+      const selectedTeam = document.getElementById('team-filter').value;
+      const selectedDriver = document.getElementById('driver-select').value;
+
+      if (selectedDriverFilter === 'NONE') return [];
+
+      return Object.keys(driversMap).map(String).filter(numStr => {
+        const driver = driversMap[Number(numStr)] || driversMap[numStr];
+        const matchesTeam = (selectedTeam === 'ALL' || (driver && driver.team_name === selectedTeam));
+        const matchesDriver = (selectedDriver === 'ALL' || selectedDriver === numStr);
+        return matchesTeam && matchesDriver;
+      });
     }
 
     function renderFilteredViews() {
-      const selectedNums = getSelectedDriverNumbers();
+      const activeNums = getActiveDriverNumbers();
       const sType = document.getElementById('type-select').value;
 
-      renderChart(selectedNums);
-      renderSectorTable(selectedNums);
+      renderChart(activeNums);
+      renderSectorTable(activeNums);
 
       if (sType === 'Race') {
-        renderClassificationTable(selectedNums);
-        renderPitTable(selectedNums);
+        renderClassificationTable(activeNums);
+        renderPitTable(activeNums);
       } else if (sType === 'Practice') {
-        renderPracticeTable(selectedNums);
+        renderPracticeTable(activeNums);
       }
     }
 
@@ -416,10 +444,8 @@
       document.getElementById('kpi-val-4').innerText = lapsData.length;
     }
 
-    function renderChart(selectedNums) {
-      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
-
-      const datasets = targets.map(numStr => {
+    function renderChart(activeNums) {
+      const datasets = activeNums.map(numStr => {
         const num = Number(numStr);
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
         const driver = driversMap[num] || driversMap[numStr] || { broadcast_name: numStr };
@@ -449,14 +475,18 @@
       });
     }
 
-    function renderClassificationTable(selectedNums) {
+    function renderClassificationTable(activeNums) {
       const tbody = document.getElementById('classification-table');
       tbody.innerHTML = '';
 
-      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
+      if (!activeNums || !activeNums.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color:#888;">No drivers match the current filter selection.</td></tr>';
+        return;
+      }
+
       const maxLaps = Math.max(...lapsData.map(l => l.lap_number || 0), 1);
 
-      const driverSummary = targets.map(numStr => {
+      const driverSummary = activeNums.map(numStr => {
         const num = Number(numStr);
         const driver = driversMap[num] || driversMap[numStr];
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr);
@@ -508,7 +538,7 @@
       });
     }
 
-    function renderPitTable(selectedNums) {
+    function renderPitTable(activeNums) {
       const tbody = document.getElementById('pit-table');
       tbody.innerHTML = '';
 
@@ -517,11 +547,10 @@
         return;
       }
 
-      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
-      const filteredPits = pitData.filter(p => targets.includes(String(p.driver_number)));
+      const filteredPits = pitData.filter(p => activeNums.includes(String(p.driver_number)));
 
       if (!filteredPits.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="color: #888;">No pit stops recorded for selected drivers.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="color: #888;">No pit stops recorded for active drivers.</td></tr>';
         return;
       }
 
@@ -543,13 +572,11 @@
       });
     }
 
-    function renderSectorTable(selectedNums) {
+    function renderSectorTable(activeNums) {
       const tbody = document.getElementById('sector-table');
       tbody.innerHTML = '';
 
-      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
-
-      targets.forEach(numStr => {
+      activeNums.forEach(numStr => {
         const dLaps = lapsData.filter(l => String(l.driver_number) === numStr && l.lap_duration);
         if (!dLaps.length) return;
 
@@ -582,13 +609,11 @@
       });
     }
 
-    function renderPracticeTable(selectedNums) {
+    function renderPracticeTable(activeNums) {
       const tbody = document.getElementById('practice-table');
       tbody.innerHTML = '';
 
-      const targets = (selectedNums && selectedNums.length) ? selectedNums : Object.keys(driversMap).map(String);
-
-      targets.forEach(numStr => {
+      activeNums.forEach(numStr => {
         const driver = driversMap[Number(numStr)] || driversMap[numStr];
         const dStints = stintsData.filter(s => String(s.driver_number) === numStr);
 
@@ -636,7 +661,7 @@
       });
     }
 
-    initYears();
+    autoLoadLatestLandingEvent();
   </script>
 </body>
 </html>
