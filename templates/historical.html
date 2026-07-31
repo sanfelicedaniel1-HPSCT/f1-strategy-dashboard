@@ -18,6 +18,9 @@
     button { background: #e10600; border: none; cursor: pointer; font-weight: bold; }
     button:hover { background: #ff1e1e; }
     
+    .btn-action { padding: 6px 12px; border-radius: 4px; border: 1px solid #555; background: #2a2a2a; color: #fff; cursor: pointer; font-size: 0.85rem; font-weight: bold; }
+    .btn-action:hover { background: #e10600; border-color: #e10600; }
+
     .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px; }
     .kpi-card { background: #1e1e1e; padding: 15px; border-radius: 8px; border-left: 4px solid #e10600; }
     .kpi-title { font-size: 0.85rem; color: #888; text-transform: uppercase; }
@@ -85,9 +88,15 @@
     </div>
   </div>
 
-  <!-- LAP PACE GRAPH -->
+  <!-- LAP PACE GRAPH WITH DRIVER FILTER -->
   <div class="card">
     <h2 id="session-title">Select an Event Above</h2>
+    <div style="display: flex; gap: 10px; align-items: center; margin: 15px 0;">
+      <label for="driver-select">Filter Drivers:</label>
+      <select id="driver-select" multiple size="4" onchange="renderFilteredViews()"></select>
+      <button class="btn-action" onclick="selectAllDrivers()">Select All</button>
+      <button class="btn-action" onclick="deselectAllDrivers()">Deselect All</button>
+    </div>
     <div class="chart-container"><canvas id="lapChart"></canvas></div>
   </div>
 
@@ -120,7 +129,7 @@
 
   <script>
     let driversMap = {}, lapsData = [], positionData = [], stintsData = [], raceControlData = [], chartInstance = null;
-    const MAX_CLEAN_LAP_TIME = 180.0; // Filter out red flags & slow out-laps over 3 minutes
+    const MAX_CLEAN_LAP_TIME = 180.0;
 
     function initYears() {
       const yearSelect = document.getElementById('year-select');
@@ -183,10 +192,45 @@
       stintsData = await sRes.json();
       raceControlData = await rcRes.json();
 
+      populateDriverFilter();
       renderKPIs();
-      renderChart();
-      renderClassificationTable();
+      renderFilteredViews();
       renderPenalties();
+    }
+
+    function populateDriverFilter() {
+      const select = document.getElementById('driver-select');
+      select.innerHTML = '';
+      Object.values(driversMap).forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.driver_number;
+        opt.selected = true; // All selected initially
+        opt.innerText = `#${d.driver_number} - ${d.broadcast_name}`;
+        select.appendChild(opt);
+      });
+    }
+
+    function selectAllDrivers() {
+      const select = document.getElementById('driver-select');
+      Array.from(select.options).forEach(opt => opt.selected = true);
+      renderFilteredViews();
+    }
+
+    function deselectAllDrivers() {
+      const select = document.getElementById('driver-select');
+      Array.from(select.options).forEach(opt => opt.selected = false);
+      renderFilteredViews();
+    }
+
+    function getSelectedDriverNumbers() {
+      const select = document.getElementById('driver-select');
+      return Array.from(select.selectedOptions).map(o => o.value);
+    }
+
+    function renderFilteredViews() {
+      const selectedNums = getSelectedDriverNumbers();
+      renderChart(selectedNums);
+      renderClassificationTable(selectedNums);
     }
 
     function renderKPIs() {
@@ -219,8 +263,8 @@
       document.getElementById('kpi-dnfs').innerText = dnfCount;
     }
 
-    function renderChart() {
-      const datasets = Object.keys(driversMap).map(num => {
+    function renderChart(selectedNums) {
+      const datasets = selectedNums.map(num => {
         const dLaps = lapsData.filter(l => l.driver_number == num && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
         const driver = driversMap[num] || { broadcast_name: num, team_colour: 'FFFFFF' };
         return {
@@ -249,13 +293,13 @@
       });
     }
 
-    function renderClassificationTable() {
+    function renderClassificationTable(selectedNums) {
       const tbody = document.getElementById('classification-table');
       tbody.innerHTML = '';
 
       const maxLaps = Math.max(...lapsData.map(l => l.lap_number || 0));
 
-      const driverSummary = Object.keys(driversMap).map(num => {
+      const driverSummary = selectedNums.map(num => {
         const driver = driversMap[num];
         const dLaps = lapsData.filter(l => l.driver_number == num);
         const dPos = positionData.filter(p => p.driver_number == num);

@@ -19,6 +19,10 @@
     th, td { padding: 8px; border-bottom: 1px solid #333; font-size: 0.95rem; }
     th { color: #888; background: #181818; }
     .badge { background: #e10600; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 15px; }
+    select { padding: 8px; border-radius: 4px; background: #222; color: #fff; border: 1px solid #444; }
+    .btn-action { padding: 6px 12px; border-radius: 4px; border: 1px solid #555; background: #2a2a2a; color: #fff; cursor: pointer; font-size: 0.85rem; font-weight: bold; }
+    .btn-action:hover { background: #e10600; border-color: #e10600; }
     .hidden { display: none; }
   </style>
 </head>
@@ -29,14 +33,14 @@
     <a href="/historical">📜 Historical Vault</a>
   </nav>
 
-  <!-- COUNTDOWN CARD (Shown when offline) -->
+  <!-- COUNTDOWN CARD -->
   <div id="countdown-card" class="card hidden">
     <h2>⏳ Next F1 Session Countdown</h2>
     <p id="next-session-title" style="font-size: 1.2rem; margin-top: 8px; color: #ccc;">Checking F1 Schedule...</p>
     <div id="countdown-box">00d 00h 00m 00s</div>
   </div>
 
-  <!-- LIVE DASHBOARD CARD (Shown when FP1/2/3, Quali, Sprint, or Race is active) -->
+  <!-- LIVE DASHBOARD -->
   <div id="live-dashboard" class="hidden">
     <div class="card" style="text-align: left;">
       <h2><span class="badge">LIVE</span> <span id="session-info">Connecting to pit wall telemetry...</span></h2>
@@ -45,6 +49,12 @@
 
     <div class="card" style="text-align: left;">
       <h2>Live Pace & Track Events</h2>
+      <div class="controls">
+        <label for="driver-select">Filter Drivers:</label>
+        <select id="driver-select" multiple size="4" onchange="renderLiveDashboard()"></select>
+        <button class="btn-action" onclick="selectAllDrivers()">Select All</button>
+        <button class="btn-action" onclick="deselectAllDrivers()">Deselect All</button>
+      </div>
       <div class="chart-container"><canvas id="lapChart"></canvas></div>
     </div>
 
@@ -70,7 +80,7 @@
   <script>
     let sessionKey = null, driversMap = {}, lapsData = [], intervalsData = [], raceControlData = [], chartInstance = null;
     const PIT_LOSS_SECONDS = 22.0;
-    const MAX_CLEAN_LAP_TIME = 180.0; // Filter out red flags & slow out-laps > 3 minutes
+    const MAX_CLEAN_LAP_TIME = 180.0;
 
     async function checkNextOrActiveSession() {
       try {
@@ -97,7 +107,6 @@
             activeSession = s;
             break;
           }
-          
           if (start > now) {
             upcomingSession = s;
             break;
@@ -125,12 +134,8 @@
     function showCountdown(session) {
       document.getElementById('countdown-card').classList.remove('hidden');
       document.getElementById('live-dashboard').classList.add('hidden');
-
       if (!session) return;
-
-      document.getElementById('next-session-title').innerText = 
-        `${session.location} GP — ${session.session_name}`;
-
+      document.getElementById('next-session-title').innerText = `${session.location} GP — ${session.session_name}`;
       const targetDate = new Date(session.date_start);
 
       function updateTimer() {
@@ -143,18 +148,16 @@
         const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
         const m = Math.floor((diff / 1000 / 60) % 60);
         const s = Math.floor((diff / 1000) % 60);
-
-        document.getElementById('countdown-box').innerText = 
-          `${String(d).padStart(2,'0')}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
+        document.getElementById('countdown-box').innerText = `${String(d).padStart(2,'0')}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
       }
-      
       updateTimer();
       setInterval(updateTimer, 1000);
     }
 
     async function initLiveDashboard() {
       await loadLiveData();
-      setInterval(loadLiveData, 15000); // Auto-poll telemetry every 15 seconds
+      populateDriverSelect();
+      setInterval(loadLiveData, 15000);
     }
 
     async function loadLiveData() {
@@ -170,15 +173,46 @@
       intervalsData = await iRes.json();
       raceControlData = await rRes.json();
 
-      renderLiveChart();
-      renderLiveTable();
+      renderLiveDashboard();
     }
 
-    function renderLiveChart() {
-      const driverNums = Object.keys(driversMap);
-      
-      // Filter out outlier laps (> 180s) so red flags or long pit stops don't flatten the graph
-      const datasets = driverNums.map(num => {
+    function populateDriverSelect() {
+      const select = document.getElementById('driver-select');
+      select.innerHTML = '';
+      Object.values(driversMap).forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.driver_number;
+        opt.selected = true; // Selected by default
+        opt.innerText = `#${d.driver_number} - ${d.broadcast_name}`;
+        select.appendChild(opt);
+      });
+    }
+
+    function selectAllDrivers() {
+      const select = document.getElementById('driver-select');
+      Array.from(select.options).forEach(opt => opt.selected = true);
+      renderLiveDashboard();
+    }
+
+    function deselectAllDrivers() {
+      const select = document.getElementById('driver-select');
+      Array.from(select.options).forEach(opt => opt.selected = false);
+      renderLiveDashboard();
+    }
+
+    function getSelectedDriverNumbers() {
+      const select = document.getElementById('driver-select');
+      return Array.from(select.selectedOptions).map(o => o.value);
+    }
+
+    function renderLiveDashboard() {
+      const selectedNums = getSelectedDriverNumbers();
+      renderLiveChart(selectedNums);
+      renderLiveTable(selectedNums);
+    }
+
+    function renderLiveChart(selectedNums) {
+      const datasets = selectedNums.map(num => {
         const dLaps = lapsData.filter(l => l.driver_number == num && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
         const driver = driversMap[num] || { broadcast_name: num, team_colour: 'FFFFFF' };
         return {
@@ -207,11 +241,11 @@
       });
     }
 
-    function renderLiveTable() {
+    function renderLiveTable(selectedNums) {
       const tbody = document.getElementById('strategy-table');
       tbody.innerHTML = '';
 
-      Object.keys(driversMap).forEach(num => {
+      selectedNums.forEach(num => {
         const dLaps = lapsData.filter(l => l.driver_number == num);
         if (!dLaps.length) return;
 
