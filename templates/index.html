@@ -192,33 +192,23 @@
   </header>
 
   <main>
-
-    <!-- CIRCUIT GRAPHIC & OVERVIEW BANNER -->
     <div class="graphic-container">
       <svg class="graphic-svg" viewBox="0 0 300 150" xmlns="http://www.w3.org/2000/svg">
         <path d="M 10 10 L 290 10 M 10 50 L 290 50 M 10 90 L 290 90 M 10 130 L 290 130" stroke="#252525" stroke-width="1" />
         <path d="M 50 10 L 50 140 M 150 10 L 150 140 M 250 10 L 250 140" stroke="#252525" stroke-width="1" />
-        
-        <path d="M 40 110 L 100 110 Q 130 110 140 80 L 160 30 Q 170 10 210 20 L 250 40 Q 280 60 260 100 L 220 120 Q 180 140 130 120 L 60 120 Q 20 110 40 110 Z" 
-              fill="none" stroke="#333" stroke-width="8" stroke-linejoin="round" />
-        <path d="M 40 110 L 100 110 Q 130 110 140 80 L 160 30 Q 170 10 210 20 L 250 40 Q 280 60 260 100 L 220 120 Q 180 140 130 120 L 60 120 Q 20 110 40 110 Z" 
-              fill="none" stroke="#e10600" stroke-width="3" stroke-dasharray="8 4" stroke-linejoin="round" />
-        
+        <path d="M 40 110 L 100 110 Q 130 110 140 80 L 160 30 Q 170 10 210 20 L 250 40 Q 280 60 260 100 L 220 120 Q 180 140 130 120 L 60 120 Q 20 110 40 110 Z" fill="none" stroke="#333" stroke-width="8" stroke-linejoin="round" />
+        <path d="M 40 110 L 100 110 Q 130 110 140 80 L 160 30 Q 170 10 210 20 L 250 40 Q 280 60 260 100 L 220 120 Q 180 140 130 120 L 60 120 Q 20 110 40 110 Z" fill="none" stroke="#e10600" stroke-width="3" stroke-dasharray="8 4" stroke-linejoin="round" />
         <circle cx="160" cy="30" r="5" fill="#00e676" />
         <circle cx="260" cy="100" r="5" fill="#00e676" />
         <circle cx="40" cy="110" r="5" fill="#ffffff" />
       </svg>
-
       <div class="graphic-text">
         <h2>Pit Wall Strategy Engine</h2>
         <p>Scuderia Sanfelice connects directly to live OpenF1 broadcast telemetry streams to calculate position deltas, pit lane loss estimations, stint degradation slopes, and steward incident tracking in real time.</p>
       </div>
     </div>
 
-    <!-- MAIN HUB CARDS -->
     <div class="card-grid">
-      
-      <!-- LIVE HUB -->
       <a href="/live" class="hub-card">
         <div>
           <h2>🔴 Live Wall Telemetry</h2>
@@ -227,7 +217,6 @@
         <span class="btn">Launch Live Hub</span>
       </a>
 
-      <!-- HISTORICAL VAULT -->
       <a href="/historical" class="hub-card">
         <div>
           <h2>📜 Historical Vault</h2>
@@ -235,10 +224,8 @@
         </div>
         <span class="btn">Enter Historical Vault</span>
       </a>
-
     </div>
 
-    <!-- FEATURE HIGHLIGHTS -->
     <div class="features-grid">
       <div class="feature-item">
         <h3>⏱️ Sector Delta Analysis</h3>
@@ -257,12 +244,10 @@
         <p>Parses official race control notices to pinpoint specific driver penalties and track-wide flag warnings.</p>
       </div>
     </div>
-
   </main>
 
   <footer>
     <p>Powered by OpenF1 API & Scuderia Sanfelice Analytics</p>
   </footer>
-
 </body>
 </html>

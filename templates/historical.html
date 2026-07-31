@@ -55,7 +55,6 @@
 
   <h1>📜 Session Analysis Vault</h1>
 
-  <!-- TOP CONTROL BAR -->
   <div class="controls">
     <div class="control-item">
       <label for="year-select">Year</label>
@@ -93,7 +92,6 @@
     <button onclick="fetchHistoricalData()">Load Session Analytics</button>
   </div>
 
-  <!-- KPI SUMMARY CARDS -->
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="kpi-title" id="kpi-title-1">Race Winner</div>
@@ -113,7 +111,6 @@
     </div>
   </div>
 
-  <!-- PACE GRAPH -->
   <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
       <h2 id="session-title" style="margin: 0;">Loading latest event telemetry...</h2>
@@ -125,7 +122,6 @@
     <div class="chart-container"><canvas id="lapChart"></canvas></div>
   </div>
 
-  <!-- RACE SPECIFIC CARD: CLASSIFICATION -->
   <div id="section-race-classification" class="card">
     <h2>Official Race Classification & Strategy</h2>
     <table id="tbl-classification">
@@ -144,7 +140,6 @@
     </table>
   </div>
 
-  <!-- RACE SPECIFIC CARD: PIT STOPS -->
   <div id="section-race-pits" class="card">
     <h2>🔧 Pit Stop Durations & Lane Time Analysis</h2>
     <table id="tbl-pits">
@@ -161,7 +156,6 @@
     </table>
   </div>
 
-  <!-- QUALIFYING & PRACTICE CARD: SECTORS -->
   <div id="section-sectors" class="card">
     <h2>⏱️ Sector Analysis & Theoretical Ideal Laps</h2>
     <table id="tbl-sectors">
@@ -180,7 +174,6 @@
     </table>
   </div>
 
-  <!-- PRACTICE SPECIFIC CARD: LONG RUNS -->
   <div id="section-practice-runs" class="card hidden">
     <h2>🧪 Long Run Stint Simulations (5+ Consecutive Laps)</h2>
     <table id="tbl-practice">
@@ -197,7 +190,6 @@
     </table>
   </div>
 
-  <!-- STEWARD NOTICES -->
   <div class="card">
     <h2>⚠️ Steward Notices & Track Incident Log</h2>
     <div id="penalties-container">
@@ -206,7 +198,7 @@
   </div>
 
   <script>
-    let driversMap = {}, lapsData = [], positionData = [], stintsData = [], pitData = [], raceControlData = [], chartInstance = null;
+    let driversMap = {}, lapsData = [], positionData = [], stintsData = [], pitData = [], raceControlData = [], intervalsData = [], chartInstance = null;
     let selectedDriverFilter = 'ALL';
     const MAX_CLEAN_LAP_TIME = 180.0;
 
@@ -288,13 +280,14 @@
       document.getElementById('session-title').innerText = sessionTitle;
 
       try {
-        const [dRes, lRes, pRes, sRes, pitRes, rcRes] = await Promise.all([
+        const [dRes, lRes, pRes, sRes, pitRes, rcRes, iRes] = await Promise.all([
           fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`),
           fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`),
           fetch(`https://api.openf1.org/v1/position?session_key=${sessionKey}`),
           fetch(`https://api.openf1.org/v1/stints?session_key=${sessionKey}`),
           fetch(`https://api.openf1.org/v1/pit?session_key=${sessionKey}`),
-          fetch(`https://api.openf1.org/v1/race_control?session_key=${sessionKey}`)
+          fetch(`https://api.openf1.org/v1/race_control?session_key=${sessionKey}`),
+          fetch(`https://api.openf1.org/v1/intervals?session_key=${sessionKey}`)
         ]);
 
         driversMap = {};
@@ -308,6 +301,7 @@
         stintsData = (await sRes.json()) || [];
         pitData = (await pitRes.json()) || [];
         raceControlData = (await rcRes.json()) || [];
+        intervalsData = (await iRes.json()) || [];
 
         adjustLayoutForSessionType();
         populateTeamAndDriverFilters();
@@ -321,7 +315,6 @@
 
     function adjustLayoutForSessionType() {
       const sType = document.getElementById('type-select').value;
-      
       const raceClass = document.getElementById('section-race-classification');
       const racePits = document.getElementById('section-race-pits');
       const practiceRuns = document.getElementById('section-practice-runs');
@@ -349,10 +342,8 @@
       driverSelect.innerHTML = '<option value="ALL">All Drivers</option>';
 
       const teams = new Set();
-
       Object.values(driversMap).forEach(d => {
         if (d.team_name) teams.add(d.team_name);
-
         const opt = document.createElement('option');
         opt.value = String(d.driver_number);
         opt.innerText = `#${d.driver_number} - ${d.broadcast_name || d.full_name || d.driver_number}`;

@@ -742,7 +742,7 @@
       const pMatch = text.match(/^P(\d+)/i);
       if (pMatch) return Number(pMatch[1]);
 
-      const numMatch = text.match(/^([+-]?\d+\.?\d*)/);
+      const numMatch = text.match(/^([+-]?1?\d+\.?\d*)/);
       if (numMatch) {
         const num = parseFloat(numMatch[1]);
         if (!isNaN(num)) return num;
