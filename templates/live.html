@@ -228,7 +228,23 @@
         } else if (upcomingSession) {
           showCountdown(upcomingSession);
         } else {
-          showCountdown(sessions[sessions.length - 1]);
+          const latestRes = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
+          const latestArr = await latestRes.json();
+          if (latestArr && latestArr.length > 0) {
+            const activeSession = latestArr[0];
+            document.getElementById('live-dashboard').classList.remove('hidden');
+            document.getElementById('countdown-card').classList.add('hidden');
+            sessionKey = String(activeSession.session_key);
+            currentSessionType = activeSession.session_type || activeSession.session_name || '';
+            
+            document.getElementById('session-info').innerText = `${activeSession.location || 'Latest'} GP — ${activeSession.session_name}`;
+            document.getElementById('session-type-sub').innerText = `Session Type: ${activeSession.session_name} (${activeSession.year})`;
+            
+            adjustLayoutForSessionType();
+            initLiveDashboard();
+          } else {
+            showCountdown(sessions[sessions.length - 1]);
+          }
         }
       } catch (err) {
         console.error("Schedule check failed:", err);

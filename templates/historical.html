@@ -226,10 +226,11 @@
         const res = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
         const latestArr = await res.json();
         
-        if (latestArr && latestArr.length) {
+        if (latestArr && latestArr.length > 0) {
           const latest = latestArr[0];
           yearSelect.value = latest.year || currentYear;
           document.getElementById('type-select').value = latest.session_type || 'Race';
+          
           await loadSessions(true, String(latest.session_key));
         } else {
           await loadSessions(true);
@@ -251,41 +252,36 @@
         select.innerHTML = '';
         
         if (!sessions || !sessions.length) {
-          const opt = document.createElement('option');
-          opt.innerText = 'No sessions found';
-          select.appendChild(opt);
+          select.innerHTML = '<option value="">No sessions found</option>';
           return;
         }
 
-        let foundMatch = false;
         sessions.forEach(s => {
           const opt = document.createElement('option');
           opt.value = String(s.session_key);
           opt.innerText = `${s.circuit_short_name || s.location} GP — ${s.session_name}`;
           select.appendChild(opt);
-
-          if (targetSessionKey && String(s.session_key) === String(targetSessionKey)) {
-            foundMatch = true;
-          }
         });
 
-        if (targetSessionKey && foundMatch) {
+        if (targetSessionKey) {
           select.value = String(targetSessionKey);
-        } else if (sessions.length > 0) {
+        }
+        
+        if (!select.value && sessions.length > 0) {
           select.selectedIndex = sessions.length - 1;
         }
 
-        if (shouldAutoFetchData) {
+        if (shouldAutoFetchData && select.value) {
           fetchHistoricalData();
         }
       } catch (err) {
-        console.error("Failed to fetch sessions:", err);
+        console.error("Failed to fetch sessions list:", err);
       }
     }
 
     async function fetchHistoricalData() {
       const selectEl = document.getElementById('session-select');
-      if (!selectEl || !selectEl.value || selectEl.value === 'No sessions found') return;
+      if (!selectEl || !selectEl.value || selectEl.value === '' || selectEl.value === 'No sessions found') return;
 
       const sessionKey = selectEl.value;
       const sessionTitle = selectEl.selectedOptions[0] ? selectEl.selectedOptions[0].innerText : "Latest Event";
@@ -325,6 +321,7 @@
 
     function adjustLayoutForSessionType() {
       const sType = document.getElementById('type-select').value;
+      
       const raceClass = document.getElementById('section-race-classification');
       const racePits = document.getElementById('section-race-pits');
       const practiceRuns = document.getElementById('section-practice-runs');
@@ -352,8 +349,10 @@
       driverSelect.innerHTML = '<option value="ALL">All Drivers</option>';
 
       const teams = new Set();
+
       Object.values(driversMap).forEach(d => {
         if (d.team_name) teams.add(d.team_name);
+
         const opt = document.createElement('option');
         opt.value = String(d.driver_number);
         opt.innerText = `#${d.driver_number} - ${d.broadcast_name || d.full_name || d.driver_number}`;
