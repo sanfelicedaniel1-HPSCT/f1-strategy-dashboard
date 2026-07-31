@@ -47,7 +47,7 @@
     <a href="/historical" class="active">📜 Historical Vault</a>
   </nav>
 
-  <h1>📜 Post-Race Analysis Vault</h1>
+  <h1>📜 Session Analysis Vault</h1>
 
   <div class="controls">
     <label>Year:
@@ -89,7 +89,7 @@
     </div>
   </div>
 
-  <!-- PACE GRAPH WITH DRIVER FILTER -->
+  <!-- MAIN LAP PACE CHART -->
   <div class="card">
     <h2 id="session-title">Select an Event Above</h2>
     <div style="display: flex; gap: 10px; align-items: center; margin: 15px 0;">
@@ -137,7 +137,7 @@
     </table>
   </div>
 
-  <!-- QUALIFYING & PRACTICE CARD: SECTORS -->
+  <!-- QUALIFYING & PRACTICE CARD: SECTOR BREAKDOWN -->
   <div id="section-sectors" class="card">
     <h2>⏱️ Sector Analysis & Theoretical Ideal Laps</h2>
     <table>
@@ -156,7 +156,7 @@
     </table>
   </div>
 
-  <!-- PRACTICE SPECIFIC CARD: LONG RUNS -->
+  <!-- PRACTICE SPECIFIC CARD: LONG RUN DEGRADATION -->
   <div id="section-practice-runs" class="card hidden">
     <h2>🧪 Long Run Stint Simulations (5+ Consecutive Laps)</h2>
     <table>
@@ -173,7 +173,7 @@
     </table>
   </div>
 
-  <!-- STEWARD NOTICES -->
+  <!-- STEWARD NOTICES & INCIDENTS -->
   <div class="card">
     <h2>⚠️ Steward Notices & Track Incident Log</h2>
     <div id="penalties-container">
@@ -223,7 +223,7 @@
           select.appendChild(opt);
         });
       } catch (err) {
-        console.error("Failed to load sessions:", err);
+        console.error("Failed to fetch sessions:", err);
       }
     }
 
@@ -263,7 +263,7 @@
         renderFilteredViews();
         renderPenalties();
       } catch (err) {
-        console.error("Error fetching historical data:", err);
+        console.error("Error fetching historical telemetry:", err);
       }
     }
 
@@ -426,7 +426,6 @@
         return { numStr, driver, startPos, finalPos, lapCount: dLaps.length, totalDuration, avgPace, maxSpeed, stintStr, isDNF };
       });
 
-      // Primary sort by final position; Secondary sort fallback by laps completed and total duration
       driverSummary.sort((a, b) => {
         if (a.finalPos !== 99 && b.finalPos !== 99) return a.finalPos - b.finalPos;
         if (b.lapCount !== a.lapCount) return b.lapCount - a.lapCount;
