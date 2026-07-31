@@ -1,23 +1,3 @@
-function renderDashboardForSessionType(sessionType) {
-  // sessionType values from OpenF1: 'Practice', 'Qualifying', 'Race'
-  
-  if (sessionType.includes('Practice')) {
-    // Render Practice layout
-    renderLongRunStintGraph();
-    renderTireDegradationTable();
-  } 
-  else if (sessionType.includes('Qualifying')) {
-    // Render Qualifying layout
-    renderSectorDeltaChart();
-    renderTheoreticalBestLapTable();
-  } 
-  else if (sessionType.includes('Race')) {
-    // Render Race layout
-    renderLapPaceAndFlagChart();
-    renderPitExitDeltaTable();
-  }
-}
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -119,7 +99,7 @@ function renderDashboardForSessionType(sessionType) {
         <tr>
           <th>Fin Pos</th>
           <th>Driver</th>
-          <th>Grid $\rightarrow$ Finish ($\Delta$)</th>
+          <th>Grid ➔ Finish (Δ)</th>
           <th>Tire Strategy (Stints)</th>
           <th>Avg Pace</th>
           <th>Top Speed</th>
@@ -140,6 +120,7 @@ function renderDashboardForSessionType(sessionType) {
 
   <script>
     let driversMap = {}, lapsData = [], positionData = [], stintsData = [], raceControlData = [], chartInstance = null;
+    const MAX_CLEAN_LAP_TIME = 180.0; // Filter out red flags & slow out-laps over 3 minutes
 
     function initYears() {
       const yearSelect = document.getElementById('year-select');
@@ -209,20 +190,17 @@ function renderDashboardForSessionType(sessionType) {
     }
 
     function renderKPIs() {
-      // Find winner (Position 1 at latest timestamp)
       const p1Positions = positionData.filter(p => p.position === 1);
       const winnerNum = p1Positions.length ? p1Positions[p1Positions.length - 1].driver_number : null;
       document.getElementById('kpi-winner').innerText = winnerNum && driversMap[winnerNum] ? driversMap[winnerNum].broadcast_name : 'N/A';
 
-      // Find overall Fastest Lap
-      const validLaps = lapsData.filter(l => l.lap_duration);
+      const validLaps = lapsData.filter(l => l.lap_duration && l.lap_duration > 50 && l.lap_duration < MAX_CLEAN_LAP_TIME);
       if (validLaps.length) {
         const bestLap = validLaps.reduce((prev, curr) => prev.lap_duration < curr.lap_duration ? prev : curr);
         const driverName = driversMap[bestLap.driver_number] ? driversMap[bestLap.driver_number].broadcast_name : `#${bestLap.driver_number}`;
         document.getElementById('kpi-fastest-lap').innerText = `${driverName} (${bestLap.lap_duration.toFixed(3)}s)`;
       }
 
-      // Find Top Speed Trap
       let topSpeed = 0, topSpeedDriver = 'N/A';
       lapsData.forEach(l => {
         if (l.st_speed && l.st_speed > topSpeed) {
@@ -232,7 +210,6 @@ function renderDashboardForSessionType(sessionType) {
       });
       document.getElementById('kpi-top-speed').innerText = `${topSpeedDriver} (${topSpeed} km/h)`;
 
-      // Count DNFs
       const maxLaps = Math.max(...lapsData.map(l => l.lap_number || 0));
       let dnfCount = 0;
       Object.keys(driversMap).forEach(num => {
@@ -244,7 +221,7 @@ function renderDashboardForSessionType(sessionType) {
 
     function renderChart() {
       const datasets = Object.keys(driversMap).map(num => {
-        const dLaps = lapsData.filter(l => l.driver_number == num && l.lap_duration);
+        const dLaps = lapsData.filter(l => l.driver_number == num && l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
         const driver = driversMap[num] || { broadcast_name: num, team_colour: 'FFFFFF' };
         return {
           label: driver.broadcast_name,
@@ -266,7 +243,7 @@ function renderDashboardForSessionType(sessionType) {
           maintainAspectRatio: false,
           scales: {
             x: { type: 'linear', title: { display: true, text: 'Lap Number', color: '#888' } },
-            y: { title: { display: true, text: 'Lap Time (Seconds)', color: '#888' } }
+            y: { title: { display: true, text: 'Lap Time (Seconds)', color: '#888' }, suggestedMax: 140 }
           }
         }
       });
@@ -278,7 +255,6 @@ function renderDashboardForSessionType(sessionType) {
 
       const maxLaps = Math.max(...lapsData.map(l => l.lap_number || 0));
 
-      // Calculate final positions per driver
       const driverSummary = Object.keys(driversMap).map(num => {
         const driver = driversMap[num];
         const dLaps = lapsData.filter(l => l.driver_number == num);
@@ -287,11 +263,10 @@ function renderDashboardForSessionType(sessionType) {
         const startPos = dPos.length ? dPos[0].position : 'N/A';
         const finalPos = dPos.length ? dPos[dPos.length - 1].position : 99;
 
-        const validLaps = dLaps.filter(l => l.lap_duration);
+        const validLaps = dLaps.filter(l => l.lap_duration && l.lap_duration < MAX_CLEAN_LAP_TIME);
         const avgPace = validLaps.length ? (validLaps.reduce((a, b) => a + b.lap_duration, 0) / validLaps.length).toFixed(2) : 'N/A';
         const maxSpeed = Math.max(...dLaps.map(l => l.st_speed || 0));
 
-        // Format Tire Stint Progression (e.g., M (18L) -> H (24L))
         const dStints = stintsData.filter(s => s.driver_number == num);
         const stintStr = dStints.map(s => `${s.compound || 'UNK'} (${(s.lap_end - s.lap_start + 1) || '?'}L)`).join(' ➔ ') || 'N/A';
 
@@ -302,7 +277,6 @@ function renderDashboardForSessionType(sessionType) {
         };
       });
 
-      // Sort drivers by final position
       driverSummary.sort((a, b) => a.finalPos - b.finalPos);
 
       driverSummary.forEach((d, idx) => {
@@ -332,7 +306,6 @@ function renderDashboardForSessionType(sessionType) {
       const container = document.getElementById('penalties-container');
       container.innerHTML = '';
 
-      // Filter race control messages for penalties and steward decisions
       const penalties = raceControlData.filter(rc => 
         rc.category === 'Penalty' || 
         rc.message?.includes('PENALTY') || 
