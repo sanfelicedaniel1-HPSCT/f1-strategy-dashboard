@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scuderia San Felice — F1 Strategy Dashboard</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #121212;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a1a1a;
+      border-bottom: 3px solid #e10600;
+      padding: 20px;
+      text-align: center;
+    }
+
+    header h1 {
+      margin: 0;
+      color: #e10600;
+      font-size: 2.2rem;
+      letter-spacing: 1px;
+    }
+
+    header p {
+      margin: 5px 0 0;
+      color: #888;
+      font-size: 1rem;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 20px;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 30px;
+      max-width: 900px;
+      width: 100%;
+    }
+
+    .hub-card {
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 30px;
+      text-align: center;
+      text-decoration: none;
+      color: #fff;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .hub-card:hover {
+      transform: translateY(-5px);
+      border-color: #e10600;
+      box-shadow: 0 8px 24px rgba(225, 6, 0, 0.25);
+    }
+
+    .hub-card h2 {
+      color: #e10600;
+      margin-top: 0;
+      font-size: 1.6rem;
+    }
+
+    .hub-card p {
+      color: #aaa;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin-bottom: 25px;
+    }
+
+    .btn {
+      background: #e10600;
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 1rem;
+      display: inline-block;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      color: #555;
+      font-size: 0.85rem;
+      border-top: 1px solid #222;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🏎️ Scuderia San Felice</h1>
+    <p>Real-Time F1 Telemetry & Historical Race Analytics Hub</p>
+  </header>
+
+  <main>
+    <div class="card-grid">
+      
+      <!-- LIVE DASHBOARD CARD -->
+      <a href="/live" class="hub-card">
+        <div>
+          <h2>🔴 Live Wall Telemetry</h2>
+          <p>Real-time session tracker featuring interval deltas, tire compound age, pit lane exit loss predictions, and live steward notices.</p>
+        </div>
+        <span class="btn">Launch Live Hub</span>
+      </a>
+
+      <!-- HISTORICAL VAULT CARD -->
+      <a href="/historical" class="hub-card">
+        <div>
+          <h2>📜 Historical Analysis Vault</h2>
+          <p>Post-race analytics engine. Filter by team or driver to dissect race classifications, pit stop times, sector deltas, and pace degradation.</p>
+        </div>
+        <span class="btn">Enter Historical Vault</span>
+      </a>
+
+    </div>
+  </main>
+
+  <footer>
+    <p>Powered by OpenF1 API & Scuderia San Felice Analytics</p>
+  </footer>
+
+</body>
+</html>
