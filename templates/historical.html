@@ -1,3 +1,23 @@
+function renderDashboardForSessionType(sessionType) {
+  // sessionType values from OpenF1: 'Practice', 'Qualifying', 'Race'
+  
+  if (sessionType.includes('Practice')) {
+    // Render Practice layout
+    renderLongRunStintGraph();
+    renderTireDegradationTable();
+  } 
+  else if (sessionType.includes('Qualifying')) {
+    // Render Qualifying layout
+    renderSectorDeltaChart();
+    renderTheoreticalBestLapTable();
+  } 
+  else if (sessionType.includes('Race')) {
+    // Render Race layout
+    renderLapPaceAndFlagChart();
+    renderPitExitDeltaTable();
+  }
+}
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,16 +31,29 @@
     nav { display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
     nav a { color: #888; text-decoration: none; font-weight: bold; font-size: 1.1rem; }
     nav a.active { color: #e10600; border-bottom: 2px solid #e10600; padding-bottom: 8px; }
-    h1, h2 { color: #e10600; margin-bottom: 5px; }
+    h1, h2, h3 { color: #e10600; margin-bottom: 5px; }
+    
     .controls { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; background: #1e1e1e; padding: 15px; border-radius: 8px; align-items: center; }
     select, button { padding: 10px; border-radius: 4px; background: #222; color: #fff; border: 1px solid #444; font-size: 1rem; }
     button { background: #e10600; border: none; cursor: pointer; font-weight: bold; }
     button:hover { background: #ff1e1e; }
+    
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px; }
+    .kpi-card { background: #1e1e1e; padding: 15px; border-radius: 8px; border-left: 4px solid #e10600; }
+    .kpi-title { font-size: 0.85rem; color: #888; text-transform: uppercase; }
+    .kpi-value { font-size: 1.4rem; font-weight: bold; margin-top: 5px; color: #fff; }
+
     .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
     .chart-container { position: relative; height: 420px; width: 100%; }
+    
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #333; font-size: 0.95rem; }
-    th { color: #888; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #333; font-size: 0.95rem; }
+    th { color: #888; background: #181818; }
+
+    .pos-gained { color: #00e676; font-weight: bold; }
+    .pos-lost { color: #ff5252; font-weight: bold; }
+    .dnf-tag { background: #d32f2f; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 0.8rem; font-weight: bold; }
+    .penalty-box { background: #2a1a1a; border-left: 3px solid #ff5252; padding: 8px 12px; margin-bottom: 8px; border-radius: 4px; font-size: 0.9rem; }
   </style>
 </head>
 <body>
@@ -30,7 +63,7 @@
     <a href="/historical" class="active">📜 Historical Vault</a>
   </nav>
 
-  <h1>📜 Historical Session Vault</h1>
+  <h1>📜 Post-Race Analysis Vault</h1>
 
   <div class="controls">
     <label>Year:
@@ -49,35 +82,70 @@
       <select id="session-select"></select>
     </label>
 
-    <button onclick="fetchHistoricalData()">Load Telemetry</button>
+    <button onclick="fetchHistoricalData()">Load Complete Analysis</button>
   </div>
 
+  <!-- KPI SUMMARY CARDS -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-title">Official Winner</div>
+      <div class="kpi-value" id="kpi-winner">--</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">Fastest Lap Award</div>
+      <div class="kpi-value" id="kpi-fastest-lap">--</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">Top Speed Trap</div>
+      <div class="kpi-value" id="kpi-top-speed">--</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">Total Retirements (DNFs)</div>
+      <div class="kpi-value" id="kpi-dnfs">--</div>
+    </div>
+  </div>
+
+  <!-- LAP PACE GRAPH -->
   <div class="card">
     <h2 id="session-title">Select an Event Above</h2>
     <div class="chart-container"><canvas id="lapChart"></canvas></div>
   </div>
 
+  <!-- CLASSIFICATION TABLE -->
   <div class="card">
-    <h2>Historical Session Summary</h2>
+    <h2>Official Finishing Classification & Tire Strategy</h2>
     <table>
       <thead>
         <tr>
-          <th>Driver</th><th>Avg Pace</th><th>Tire Compound</th><th>Max Speed</th><th>Total Pit Stops</th>
+          <th>Fin Pos</th>
+          <th>Driver</th>
+          <th>Grid $\rightarrow$ Finish ($\Delta$)</th>
+          <th>Tire Strategy (Stints)</th>
+          <th>Avg Pace</th>
+          <th>Top Speed</th>
+          <th>Status</th>
         </tr>
       </thead>
-      <tbody id="strategy-table"></tbody>
+      <tbody id="classification-table"></tbody>
     </table>
   </div>
 
+  <!-- PENALTIES & STEWARD DECISIONS -->
+  <div class="card">
+    <h2>⚠️ Steward Decisions & Race Penalties</h2>
+    <div id="penalties-container">
+      <p style="color: #888;">No steward penalties recorded for this session.</p>
+    </div>
+  </div>
+
   <script>
-    let driversMap = {}, lapsData = [], chartInstance = null;
+    let driversMap = {}, lapsData = [], positionData = [], stintsData = [], raceControlData = [], chartInstance = null;
 
     function initYears() {
       const yearSelect = document.getElementById('year-select');
       const currentYear = new Date().getFullYear();
       yearSelect.innerHTML = '';
 
-      // Populate dynamically from current year (2026) down to 2023
       for (let y = currentYear; y >= 2023; y--) {
         const opt = document.createElement('option');
         opt.value = y;
@@ -119,16 +187,59 @@
       const sessionTitle = selectEl.selectedOptions[0].innerText;
       document.getElementById('session-title').innerText = sessionTitle;
 
-      const [dRes, lRes] = await Promise.all([
+      const [dRes, lRes, pRes, sRes, rcRes] = await Promise.all([
         fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`),
-        fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`)
+        fetch(`https://api.openf1.org/v1/laps?session_key=${sessionKey}`),
+        fetch(`https://api.openf1.org/v1/position?session_key=${sessionKey}`),
+        fetch(`https://api.openf1.org/v1/stints?session_key=${sessionKey}`),
+        fetch(`https://api.openf1.org/v1/race_control?session_key=${sessionKey}`)
       ]);
 
+      driversMap = {};
       (await dRes.json()).forEach(d => driversMap[d.driver_number] = d);
       lapsData = await lRes.json();
+      positionData = await pRes.json();
+      stintsData = await sRes.json();
+      raceControlData = await rcRes.json();
 
+      renderKPIs();
       renderChart();
-      renderTable();
+      renderClassificationTable();
+      renderPenalties();
+    }
+
+    function renderKPIs() {
+      // Find winner (Position 1 at latest timestamp)
+      const p1Positions = positionData.filter(p => p.position === 1);
+      const winnerNum = p1Positions.length ? p1Positions[p1Positions.length - 1].driver_number : null;
+      document.getElementById('kpi-winner').innerText = winnerNum && driversMap[winnerNum] ? driversMap[winnerNum].broadcast_name : 'N/A';
+
+      // Find overall Fastest Lap
+      const validLaps = lapsData.filter(l => l.lap_duration);
+      if (validLaps.length) {
+        const bestLap = validLaps.reduce((prev, curr) => prev.lap_duration < curr.lap_duration ? prev : curr);
+        const driverName = driversMap[bestLap.driver_number] ? driversMap[bestLap.driver_number].broadcast_name : `#${bestLap.driver_number}`;
+        document.getElementById('kpi-fastest-lap').innerText = `${driverName} (${bestLap.lap_duration.toFixed(3)}s)`;
+      }
+
+      // Find Top Speed Trap
+      let topSpeed = 0, topSpeedDriver = 'N/A';
+      lapsData.forEach(l => {
+        if (l.st_speed && l.st_speed > topSpeed) {
+          topSpeed = l.st_speed;
+          topSpeedDriver = driversMap[l.driver_number] ? driversMap[l.driver_number].broadcast_name : `#${l.driver_number}`;
+        }
+      });
+      document.getElementById('kpi-top-speed').innerText = `${topSpeedDriver} (${topSpeed} km/h)`;
+
+      // Count DNFs
+      const maxLaps = Math.max(...lapsData.map(l => l.lap_number || 0));
+      let dnfCount = 0;
+      Object.keys(driversMap).forEach(num => {
+        const dLaps = lapsData.filter(l => l.driver_number == num);
+        if (dLaps.length < maxLaps - 5) dnfCount++;
+      });
+      document.getElementById('kpi-dnfs').innerText = dnfCount;
     }
 
     function renderChart() {
@@ -161,28 +272,85 @@
       });
     }
 
-    function renderTable() {
-      const tbody = document.getElementById('strategy-table');
+    function renderClassificationTable() {
+      const tbody = document.getElementById('classification-table');
       tbody.innerHTML = '';
-      Object.keys(driversMap).forEach(num => {
-        const dLaps = lapsData.filter(l => l.driver_number == num);
-        if (!dLaps.length) return;
+
+      const maxLaps = Math.max(...lapsData.map(l => l.lap_number || 0));
+
+      // Calculate final positions per driver
+      const driverSummary = Object.keys(driversMap).map(num => {
         const driver = driversMap[num];
+        const dLaps = lapsData.filter(l => l.driver_number == num);
+        const dPos = positionData.filter(p => p.driver_number == num);
+
+        const startPos = dPos.length ? dPos[0].position : 'N/A';
+        const finalPos = dPos.length ? dPos[dPos.length - 1].position : 99;
+
         const validLaps = dLaps.filter(l => l.lap_duration);
-        const avgLap = (validLaps.reduce((acc, l) => acc + l.lap_duration, 0) / validLaps.length).toFixed(2);
-        const latestLap = dLaps[dLaps.length - 1];
+        const avgPace = validLaps.length ? (validLaps.reduce((a, b) => a + b.lap_duration, 0) / validLaps.length).toFixed(2) : 'N/A';
         const maxSpeed = Math.max(...dLaps.map(l => l.st_speed || 0));
-        const pitStops = dLaps.filter(l => l.is_pit_out_lap).length;
+
+        // Format Tire Stint Progression (e.g., M (18L) -> H (24L))
+        const dStints = stintsData.filter(s => s.driver_number == num);
+        const stintStr = dStints.map(s => `${s.compound || 'UNK'} (${(s.lap_end - s.lap_start + 1) || '?'}L)`).join(' ➔ ') || 'N/A';
+
+        const isDNF = dLaps.length < maxLaps - 5;
+
+        return {
+          num, driver, startPos, finalPos, avgPace, maxSpeed, stintStr, isDNF
+        };
+      });
+
+      // Sort drivers by final position
+      driverSummary.sort((a, b) => a.finalPos - b.finalPos);
+
+      driverSummary.forEach((d, idx) => {
+        let posDeltaStr = 'N/A';
+        if (d.startPos !== 'N/A' && d.finalPos !== 99) {
+          const delta = d.startPos - d.finalPos;
+          if (delta > 0) posDeltaStr = `<span class="pos-gained">▲ +${delta} (P${d.startPos} ➔ P${d.finalPos})</span>`;
+          else if (delta < 0) posDeltaStr = `<span class="pos-lost">▼ ${delta} (P${d.startPos} ➔ P${d.finalPos})</span>`;
+          else posDeltaStr = `━ 0 (P${d.startPos})`;
+        }
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><strong>${driver ? driver.broadcast_name : num}</strong></td>
-          <td>${isNaN(avgLap) ? 'N/A' : avgLap + 's'}</td>
-          <td>${latestLap?.compound || 'Unk'}</td>
-          <td>${maxSpeed > 0 ? maxSpeed + ' km/h' : 'N/A'}</td>
-          <td>${pitStops}</td>
+          <td><strong>P${idx + 1}</strong></td>
+          <td><strong>${d.driver ? d.driver.broadcast_name : d.num}</strong></td>
+          <td>${posDeltaStr}</td>
+          <td style="font-size: 0.85rem; color: #aaa;">${d.stintStr}</td>
+          <td>${d.avgPace !== 'N/A' ? d.avgPace + 's' : 'N/A'}</td>
+          <td>${d.maxSpeed > 0 ? d.maxSpeed + ' km/h' : 'N/A'}</td>
+          <td>${d.isDNF ? '<span class="dnf-tag">DNF</span>' : '<span style="color: #00e676;">FINISHED</span>'}</td>
         `;
         tbody.appendChild(tr);
+      });
+    }
+
+    function renderPenalties() {
+      const container = document.getElementById('penalties-container');
+      container.innerHTML = '';
+
+      // Filter race control messages for penalties and steward decisions
+      const penalties = raceControlData.filter(rc => 
+        rc.category === 'Penalty' || 
+        rc.message?.includes('PENALTY') || 
+        rc.message?.includes('INVESTIGATION') || 
+        rc.flag === 'BLACK AND WHITE'
+      );
+
+      if (!penalties.length) {
+        container.innerHTML = '<p style="color: #888;">No steward penalties recorded for this session.</p>';
+        return;
+      }
+
+      penalties.forEach(p => {
+        const driverName = p.driver_number && driversMap[p.driver_number] ? driversMap[p.driver_number].broadcast_name : (p.driver_number ? `#${p.driver_number}` : 'ALL');
+        const box = document.createElement('div');
+        box.className = 'penalty-box';
+        box.innerHTML = `<strong>${driverName}</strong> (Lap ${p.lap_number || 'N/A'}): ${p.message}`;
+        container.appendChild(box);
       });
     }
 
