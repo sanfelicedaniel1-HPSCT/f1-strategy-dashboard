@@ -216,7 +216,7 @@
         if (activeSession) {
           document.getElementById('live-dashboard').classList.remove('hidden');
           document.getElementById('countdown-card').classList.add('hidden');
-          sessionKey = activeSession.session_key;
+          sessionKey = String(activeSession.session_key);
           currentSessionType = activeSession.session_type || activeSession.session_name || '';
           
           document.getElementById('session-info').innerText = `${activeSession.location} GP — ${activeSession.session_name}`;
@@ -284,6 +284,7 @@
     }
 
     async function loadLiveData() {
+      if (!sessionKey) return;
       try {
         const [dRes, lRes, iRes, rRes, sRes, pRes, oRes] = await Promise.all([
           fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`),
