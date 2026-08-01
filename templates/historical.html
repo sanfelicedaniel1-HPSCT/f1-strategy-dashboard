@@ -310,33 +310,40 @@
     // ── Startup ───────────────────────────────────────────────────────────────
     async function autoLoadLatestLandingEvent() {
       const yearSelect = document.getElementById('year-select');
-      // Always populate years 2023–2025; 2026 has no OpenF1 data yet
+
+      showLoading('Finding latest session…');
+
+      // ── Step 1: ask OpenF1 for session_key=latest — this always returns the
+      //   most recently completed or active session regardless of year ──────────
+      let latestYear = 2025;
+      let latestSessionKey = null;
+      let latestSessionType = 'Race';
+
+      try {
+        const latestArr = await fetchWithRetry('https://api.openf1.org/v1/sessions?session_key=latest');
+        if (latestArr && latestArr.length > 0) {
+          const s = latestArr[0];
+          latestYear = s.year || 2025;
+          latestSessionKey = String(s.session_key);
+          latestSessionType = s.session_type || 'Race';
+        }
+      } catch (err) {
+        console.warn('session_key=latest failed:', err);
+      }
+
+      // ── Step 2: populate year dropdown dynamically from latest year down ────
       yearSelect.innerHTML = '';
-      for (let y = 2025; y >= 2023; y--) {
+      const minYear = 2023;
+      for (let y = latestYear; y >= minYear; y--) {
         const opt = document.createElement('option');
         opt.value = y; opt.innerText = y;
         yearSelect.appendChild(opt);
       }
+      yearSelect.value = latestYear;
+      document.getElementById('type-select').value = latestSessionType;
 
-      showLoading('Checking latest session…');
-      try {
-        // Step 1: ask OpenF1 what the most recent session is
-        const latestArr = await fetchWithRetry('https://api.openf1.org/v1/sessions?session_key=latest');
-        if (latestArr && latestArr.length > 0) {
-          const latest = latestArr[0];
-          const safeYear = Math.min(latest.year || 2025, 2025); // cap at 2025 until 2026 data exists
-          yearSelect.value = safeYear;
-          document.getElementById('type-select').value = latest.session_type || 'Race';
-          await loadSessions(true, String(latest.session_key));
-          return;
-        }
-      } catch (err) {
-        console.warn('Latest session fetch failed, falling back to 2025:', err);
-      }
-
-      // Step 2: fallback — load 2025 races
-      yearSelect.value = '2025';
-      await loadSessions(true);
+      // ── Step 3: load the session list for that year + type, then auto-fetch ─
+      await loadSessions(true, latestSessionKey);
     }
 
     async function loadSessions(shouldAutoFetchData = false, targetSessionKey = null) {

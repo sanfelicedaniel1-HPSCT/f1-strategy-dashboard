@@ -309,42 +309,81 @@
     async function checkNextOrActiveSession() {
       showLoading('Checking F1 schedule…');
       try {
-        // Cap at 2025 — OpenF1 has no 2026 data yet; using getFullYear() causes a NetworkError
-        const queryYear = 2025;
-        let sessions = await fetchWithRetry(`https://api.openf1.org/v1/sessions?year=${queryYear}`);
+        const now = new Date();
+
+        // ── Step 1: get the most recent session from OpenF1 ─────────────────
+        // session_key=latest always returns the last known session regardless of year.
+        // This gives us the correct year to query even mid-season or between seasons.
+        const latestArr = await fetchWithRetry('https://api.openf1.org/v1/sessions?session_key=latest');
+        const latestSession = (latestArr && latestArr.length > 0) ? latestArr[0] : null;
+        const latestYear = latestSession ? latestSession.year : now.getFullYear();
+
+        // ── Step 2: fetch ALL sessions for the current F1 season ────────────
+        // We fetch the full year so we can find upcoming sessions correctly.
+        // If that returns nothing, also try the next year (pre-season data sometimes
+        // appears before the calendar year starts).
+        let sessions = await fetchWithRetry(`https://api.openf1.org/v1/sessions?year=${latestYear}`);
 
         if (!sessions || !sessions.length) {
-          const fallback = await fetchWithRetry('https://api.openf1.org/v1/sessions?session_key=latest');
-          showCountdown(fallback[0] || null);
+          // Try next year in case we're between seasons and next year's calendar is out
+          sessions = await fetchWithRetry(`https://api.openf1.org/v1/sessions?year=${latestYear + 1}`);
+        }
+
+        if (!sessions || !sessions.length) {
+          // Absolute fallback — just show latest session as replay
+          if (latestSession) startLiveDashboard(latestSession);
+          else { hideLoading(); }
           return;
         }
 
-        const now = new Date();
+        // Sort chronologically so we can scan from oldest to newest
+        sessions.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+
         let activeSession = null;
         let upcomingSession = null;
 
         for (const s of sessions) {
           const start = new Date(s.date_start);
+          // Add 30 min buffer after scheduled end — sessions sometimes run long
           const end = new Date(new Date(s.date_end).getTime() + 30 * 60000);
-          if (now >= start && now <= end) { activeSession = s; break; }
-          if (start > now && !upcomingSession) upcomingSession = s;
+
+          if (now >= start && now <= end) {
+            // Currently live
+            activeSession = s;
+            break;
+          }
+          if (start > now) {
+            // First future session found — this is the next event
+            upcomingSession = s;
+            break;
+          }
         }
 
         if (activeSession) {
+          // 🔴 There is a live session right now
           startLiveDashboard(activeSession);
         } else if (upcomingSession) {
+          // ⏳ Season has future events — show countdown to next one
           showCountdown(upcomingSession);
         } else {
-          // No active/upcoming — show the most recent session as a "replay"
-          const latest = await fetchWithRetry('https://api.openf1.org/v1/sessions?session_key=latest');
-          if (latest && latest.length > 0) {
-            startLiveDashboard(latest[0]);
+          // Season is over — show countdown to next year's opener if we can find it,
+          // otherwise show the most recent session as a replay
+          const nextYearSessions = await fetchWithRetry(`https://api.openf1.org/v1/sessions?year=${latestYear + 1}`);
+          if (nextYearSessions && nextYearSessions.length > 0) {
+            nextYearSessions.sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+            const nextOpener = nextYearSessions.find(s => new Date(s.date_start) > now);
+            if (nextOpener) { showCountdown(nextOpener); return; }
+          }
+          // True fallback: replay the most recent session
+          if (latestSession) {
+            startLiveDashboard(latestSession);
           } else {
             showCountdown(sessions[sessions.length - 1]);
           }
         }
       } catch (err) {
-        console.error("Schedule check failed:", err);
+        console.error('Schedule check failed:', err);
+        hideLoading();
       }
     }
 
