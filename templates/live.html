@@ -6,6 +6,8 @@
   <title>F1 Live Hub — Scuderia Sanfelice</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background: #121212; color: #fff; }
     nav { display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
@@ -37,6 +39,11 @@
 
     .penalty-box { background: #2a1a1a; border-left: 3px solid #ff5252; padding: 8px 12px; margin-bottom: 8px; border-radius: 4px; font-size: 0.9rem; text-align: left; }
     .hidden { display: none; }
+
+    /* Zoom toolbar */
+    .chart-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+    .chart-toolbar span { font-size: 0.78rem; color: #666; margin-left: 6px; }
+    .zoom-hint { font-size: 0.78rem; color: #555; margin-top: 6px; }
 
     /* Rate-limit warning banner */
     #rate-banner {
@@ -120,7 +127,18 @@
         <button class="btn-action" onclick="selectAllDrivers()">Select All</button>
         <button class="btn-action" onclick="deselectAllDrivers()">Deselect All</button>
       </div>
+      <!-- Zoom toolbar -->
+      <div class="chart-toolbar">
+        <button class="btn-action" onclick="resetZoom()" title="Reset to full race view">⟲ Reset Zoom</button>
+        <button class="btn-action" onclick="zoomLastN(5)">Last 5 Laps</button>
+        <button class="btn-action" onclick="zoomLastN(10)">Last 10 Laps</button>
+        <button class="btn-action" onclick="zoomLastN(20)">Last 20 Laps</button>
+        <button class="btn-action" onclick="tightenY(3)">3s Spread</button>
+        <button class="btn-action" onclick="tightenY(6)">6s Spread</button>
+        <span>🖱 Scroll to zoom · Click &amp; drag to pan</span>
+      </div>
       <div class="chart-container"><canvas id="lapChart"></canvas></div>
+      <div class="zoom-hint">💡 Tip: Scroll on the chart to zoom in/out. Hold and drag to pan. Use the buttons above for quick views.</div>
     </div>
 
     <div id="section-race-standings" class="card" style="text-align: left;">
@@ -488,6 +506,31 @@
       }
     }
 
+
+    // ── Zoom helpers ──────────────────────────────────────────────────────────
+    function resetZoom() {
+      if (chartInstance) chartInstance.resetZoom();
+    }
+
+    function zoomLastN(n) {
+      if (!chartInstance || !lapsData.length) return;
+      const maxLap = Math.max(...lapsData.map(l => l.lap_number || 0));
+      const minLap = Math.max(1, maxLap - n + 1);
+      chartInstance.zoomScale('x', { min: minLap, max: maxLap }, 'default');
+    }
+
+    function tightenY(spreadSeconds) {
+      if (!chartInstance || !lapsData.length) return;
+      const xMin = chartInstance.scales.x.min;
+      const xMax = chartInstance.scales.x.max;
+      const visible = lapsData.filter(l => l.lap_duration && l.lap_duration > 50 && l.lap_duration < MAX_CLEAN_LAP_TIME && l.lap_number >= xMin && l.lap_number <= xMax);
+      if (!visible.length) return;
+      const sorted = visible.map(l => l.lap_duration).sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)];
+      const half = spreadSeconds / 2;
+      chartInstance.zoomScale('y', { min: median - half, max: median + half }, 'default');
+    }
+
     function renderLiveDashboard() {
       const selectedNums = getSelectedDriverNumbers();
       renderLiveChart(selectedNums);
@@ -545,7 +588,22 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { annotation: { annotations: getRaceControlAnnotations() } },
+          plugins: {
+            annotation: { annotations: getRaceControlAnnotations() },
+            zoom: {
+              pan: { enabled: true, mode: 'xy', threshold: 5 },
+              zoom: {
+                wheel: { enabled: true },
+                pinch: { enabled: true },
+                mode: 'xy',
+                speed: 0.1,
+              },
+              limits: {
+                x: { min: 'original', max: 'original', minRange: 2 },
+                y: { min: 'original', max: 'original', minRange: 0.5 },
+              }
+            }
+          },
           scales: {
             x: { type: 'linear', title: { display: true, text: 'Lap Number', color: '#888' } },
             y: { title: { display: true, text: 'Lap Time (s)', color: '#888' }, suggestedMax: 140 }
