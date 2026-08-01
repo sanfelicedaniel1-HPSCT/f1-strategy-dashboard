@@ -45,6 +45,17 @@
     .chart-toolbar span { font-size: 0.78rem; color: #666; margin-left: 6px; }
     .zoom-hint { font-size: 0.78rem; color: #555; margin-top: 6px; }
 
+
+    /* Loading overlay (matches historical page) */
+    #loading-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      z-index: 9999; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    }
+    #loading-overlay.visible { display: flex; }
+    .spinner { width: 48px; height: 48px; border: 4px solid #333; border-top-color: #e10600; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-msg { color: #fff; font-size: 1rem; font-weight: bold; }
+
     /* Rate-limit warning banner */
     #rate-banner {
       display: none;
@@ -58,14 +69,6 @@
     }
     #rate-banner.visible { display: block; }
 
-    /* Refresh status indicator */
-    #refresh-status {
-      font-size: 0.8rem;
-      color: #666;
-      text-align: right;
-      margin-bottom: 8px;
-    }
-    #refresh-status.refreshing { color: #e10600; }
   </style>
 </head>
 <body>
@@ -76,11 +79,15 @@
     <a href="/historical">📜 Historical Vault</a>
   </nav>
 
+  <!-- Loading overlay -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div id="loading-msg">Connecting to pit wall telemetry…</div>
+  </div>
+
   <div id="rate-banner">
     ⚠️ OpenF1 API rate limit hit — retrying automatically. Updates will resume shortly.
   </div>
-
-  <div id="refresh-status"></div>
 
   <!-- COUNTDOWN CARD -->
   <div id="countdown-card" class="card hidden">
@@ -94,6 +101,7 @@
     <div class="card" style="text-align: left;">
       <h2><span class="badge">LIVE</span> <span id="session-info">Connecting to pit wall telemetry...</span></h2>
       <p id="session-type-sub" style="color: #888; margin-top: 5px;"></p>
+      <p id="live-refresh-status" style="color: #555; font-size: 0.78rem; margin-top: 4px;"></p>
     </div>
 
     <div class="kpi-grid">
@@ -235,10 +243,17 @@
     function showRateBanner() { document.getElementById('rate-banner').classList.add('visible'); }
     function hideRateBanner() { document.getElementById('rate-banner').classList.remove('visible'); }
 
-    function setRefreshStatus(msg, active = false) {
-      const el = document.getElementById('refresh-status');
-      el.innerText = msg;
-      el.className = active ? 'refreshing' : '';
+    function showLoading(msg = 'Connecting to pit wall telemetry…') {
+      document.getElementById('loading-msg').innerText = msg;
+      document.getElementById('loading-overlay').classList.add('visible');
+    }
+    function hideLoading() {
+      document.getElementById('loading-overlay').classList.remove('visible');
+    }
+    // Lightweight status shown inside the live dashboard card after first load
+    function setRefreshStatus(msg) {
+      const el = document.getElementById('live-refresh-status');
+      if (el) el.innerText = msg;
     }
 
     async function fetchWithRetry(url, maxRetries = 4, baseDelayMs = 1500) {
@@ -281,6 +296,9 @@
       const results = {};
       for (let i = 0; i < endpoints.length; i++) {
         const { name, url } = endpoints[i];
+        // Update overlay during first load; on subsequent polls the overlay is hidden
+        const overlayVisible = document.getElementById('loading-overlay').classList.contains('visible');
+        if (overlayVisible) document.getElementById('loading-msg').innerText = `Loading ${name} (${i + 1}/${endpoints.length})…`;
         results[name] = await fetchWithRetry(url);
         if (i < endpoints.length - 1) await delay(250);
       }
@@ -289,9 +307,11 @@
 
     // ─── Startup: check for active or upcoming session ────────────────────────
     async function checkNextOrActiveSession() {
+      showLoading('Checking F1 schedule…');
       try {
-        const currentYear = new Date().getFullYear();
-        let sessions = await fetchWithRetry(`https://api.openf1.org/v1/sessions?year=${currentYear}`);
+        // Cap at 2025 — OpenF1 has no 2026 data yet; using getFullYear() causes a NetworkError
+        const queryYear = 2025;
+        let sessions = await fetchWithRetry(`https://api.openf1.org/v1/sessions?year=${queryYear}`);
 
         if (!sessions || !sessions.length) {
           const fallback = await fetchWithRetry('https://api.openf1.org/v1/sessions?session_key=latest');
@@ -363,6 +383,7 @@
     }
 
     function showCountdown(session) {
+      hideLoading();
       document.getElementById('countdown-card').classList.remove('hidden');
       document.getElementById('live-dashboard').classList.add('hidden');
       if (!session) return;
@@ -385,8 +406,10 @@
 
     // ─── Live polling ─────────────────────────────────────────────────────────
     async function initLiveDashboard() {
+      showLoading('Loading session telemetry (1/7)…');
       await loadLiveData();
       populateDriverSelect();
+      hideLoading();
       scheduleNextRefresh();
     }
 
@@ -401,7 +424,6 @@
     async function loadLiveData() {
       if (!sessionKey || isFetching) return;
       isFetching = true;
-      setRefreshStatus('🔴 Refreshing telemetry…', true);
 
       try {
         const data = await fetchLiveEndpoints(sessionKey);
@@ -421,10 +443,10 @@
         renderPenalties();
 
         const now = new Date();
-        setRefreshStatus(`Last updated: ${now.toLocaleTimeString()} — next refresh in ${REFRESH_INTERVAL_MS / 1000}s`);
+        setRefreshStatus(`🟢 Last updated: ${now.toLocaleTimeString()} — next refresh in ${REFRESH_INTERVAL_MS / 1000}s`);
       } catch (err) {
         console.error("Error loading live data:", err);
-        setRefreshStatus('⚠️ Update failed — retrying…');
+        setRefreshStatus('⚠️ Update failed — retrying shortly…');
       } finally {
         isFetching = false;
       }
